@@ -1,39 +1,27 @@
 # java-rust-dubbo
 
-Minimal Dubbo consumer adapter for the Java/Rust REST framework.
+`java-rust-dubbo` is a small Dubbo consumer library for the Java/Rust REST framework.
 
-This project is intentionally small. It lets a Java service running on the Java/Rust REST framework call classic Dubbo providers while keeping the hot HTTP plane in Rust Hyper and the business logic in Java.
+Use it when your REST application is written in Java, your HTTP server is handled by the Rust native layer, and you only need to call Dubbo providers from your Java services without bringing a full Spring Boot or full Apache Dubbo runtime into the REST process.
 
-## What It Gives You
+The library keeps the programming model simple:
 
-- Native Dubbo consumer path for low-RSS services.
-- Static provider mode with `reactor.dubbo.providers=host:port,...`, so the consumer JVM does not need ZooKeeper, Netty, official Dubbo remoting, or Dubbo `ReferenceConfig`.
-- Rust-owned Dubbo TCP framing, bounded connection pool, bounded async queue, keepalive reuse, and response size guard.
-- Hot no-arg `byte[]` method path with a Rust-side minimal Hessian2 subset.
-- Java API that stays explicit: create a client, create a reference or method invoker, close it on shutdown.
-- Optional fallback to the official Dubbo/Netty stack when full Dubbo behavior is required.
+- Your handlers, services, and components stay in Java.
+- The HTTP I/O plane stays in Rust Hyper through the Java/Rust REST framework.
+- Dubbo calls can use a Rust native transport for lower JVM RSS.
+- ZooKeeper and the official Dubbo/Netty client stack are optional, not default requirements.
 
-## Production Position
+## When To Use It
 
-BEST: use native transport with static providers in Kubernetes/service-DNS/sidecar-managed environments.
+Recommended for:
 
-```properties
-reactor.dubbo.transport=native
-reactor.dubbo.providers=catalog-provider:20880,catalog-provider-2:20880
-reactor.dubbo.timeout-ms=1000
-reactor.dubbo.retries=0
-reactor.dubbo.max-inflight=256
-reactor.dubbo.max-response-bytes=8388608
-reactor.dubbo.native-connections-per-endpoint=16
-reactor.dubbo.native-async-workers=8
-reactor.dubbo.native-async-queue-capacity=1024
-```
+- REST services that need to call classic Dubbo providers.
+- Low-RSS Java services where loading the full Dubbo client stack is too expensive.
+- Kubernetes deployments where provider addresses can come from service DNS, config, or a sidecar-generated provider list.
+- Read-heavy or JSON-returning Dubbo methods where the provider can return a `byte[]` JSON body.
+- Java/Rust REST framework applications that want explicit setup instead of auto-configuration magic.
 
-ACCEPTABLE: leave `reactor.dubbo.providers` blank and use ZooKeeper discovery when dynamic provider discovery is worth the extra Java threads/classes/RSS.
-
-ACCEPTABLE: use `reactor.dubbo.transport=official` only when your application explicitly needs official Dubbo governance, routers, metadata center, callbacks, generic invocation, or full compatibility.
-
-ANTI-PATTERN: adding Dubbo Spring Boot starters or `dubbo-config-api` into the hot REST service just to make a simple consumer call. That recreates the memory and startup overhead this adapter avoids.
+Use the official Dubbo stack instead when you need full Dubbo governance, config-center, metadata-center, official routers, callbacks, generic invocation, Triple, REST protocol, or full filter-chain compatibility.
 
 ## Maven
 
@@ -45,15 +33,65 @@ ANTI-PATTERN: adding Dubbo Spring Boot starters or `dubbo-config-api` into the h
 </dependency>
 ```
 
-The default dependency is intentionally narrow. Official Dubbo, Netty, ZooKeeper, and Hessian Lite are optional and are not pulled into downstream applications unless you explicitly add them.
+In native mode this dependency is intentionally small. It does not pull ZooKeeper, Netty, Hessian Lite, or the official Dubbo client stack into your application unless you choose to add and use the official mode.
 
-This adapter expects the Java/Rust framework native library to be available. In `rust-java-rest`, the native library is loaded by the framework. In standalone smoke tests, expose `rust_hyper` through `java.library.path`.
+The Java/Rust framework native library must also be present. In `rust-java-rest`, the framework loads that native library for you. In standalone tests, make sure `rust_hyper` is available through `java.library.path`.
 
 ## Quick Start
 
-Create the native consumer once during application startup:
+This section shows the complete flow for adding a Dubbo consumer to a Java/Rust REST application.
+
+### 1. Add The Dependency
+
+Add the Maven dependency shown above to your application.
+
+If your project is already using the Java/Rust REST framework, the native library is usually loaded by the framework. You do not need a Dubbo Spring Boot starter.
+
+### 2. Add Basic Properties
+
+For the lowest-RSS setup, start with native transport and static providers:
+
+```properties
+reactor.dubbo.transport=native
+reactor.dubbo.providers=catalog-provider:20880
+reactor.dubbo.timeout-ms=1000
+reactor.dubbo.retries=0
+reactor.dubbo.max-inflight=256
+reactor.dubbo.max-response-bytes=8388608
+reactor.dubbo.native-connections-per-endpoint=16
+reactor.dubbo.native-async-workers=8
+reactor.dubbo.native-async-queue-capacity=1024
+```
+
+What this means:
+
+- `transport=native` tells the library to use the Rust Dubbo data-plane.
+- `providers=host:port` tells the consumer where the provider is. With this set, Java ZooKeeper is not started.
+- `retries=0` keeps latency predictable and avoids duplicate provider calls.
+- `max-inflight` and native queue settings prevent unlimited memory growth under load.
+
+### 3. Define The Dubbo Service Interface
+
+Use the same interface name and method signature that the provider exports.
+
+For the fastest current native path, a no-argument method returning `byte[]` is preferred when the provider can return ready-to-send JSON:
 
 ```java
+package com.example.catalog;
+
+public interface CatalogProviderApi {
+    byte[] nestedCatalogJson();
+}
+```
+
+The returned `byte[]` can be JSON, MessagePack, protobuf bytes, or any binary payload your HTTP layer knows how to represent.
+
+### 4. Create One Native Consumer Client At Startup
+
+Create the consumer once and reuse it. Do not create a Dubbo client per request.
+
+```java
+import com.example.catalog.CatalogProviderApi;
 import com.reactor.rust.di.annotation.Bean;
 import com.reactor.rust.di.annotation.Configuration;
 import com.reactor.rust.di.annotation.PreDestroy;
@@ -68,9 +106,17 @@ public final class DubboClientConfiguration {
 
     @Bean
     public CatalogClient catalogClient() {
-        DubboReferenceSpec<CatalogProviderApi> spec = DubboReferenceSpec.of(CatalogProviderApi.class);
+        DubboReferenceSpec<CatalogProviderApi> spec = DubboReferenceSpec
+                .builder(CatalogProviderApi.class)
+                .timeoutMs(1000)
+                .retries(0)
+                .check(false)
+                .lazy(true)
+                .build();
+
         NativeDubboMethodInvoker<byte[]> invoker =
                 client.method(spec, "nestedCatalogJson", byte[].class);
+
         return new CatalogClient(invoker);
     }
 
@@ -81,10 +127,20 @@ public final class DubboClientConfiguration {
 }
 ```
 
-Use an explicit Java client wrapper on hot paths:
+Important points:
+
+- The `NativeDubboConsumerClient` is application-scoped.
+- The method invoker is created once and reused.
+- `client.close()` releases native clients, connections, and watcher resources.
+
+### 5. Wrap The Invoker In A Java Client
+
+This wrapper keeps the rest of your application clean. Your handlers and services do not need to know about Dubbo internals.
 
 ```java
 import com.reactor.rust.dubbo.NativeDubboMethodInvoker;
+
+import java.util.concurrent.CompletableFuture;
 
 public final class CatalogClient {
     private final NativeDubboMethodInvoker<byte[]> nestedCatalogJson;
@@ -96,62 +152,173 @@ public final class CatalogClient {
     public byte[] nestedCatalogJson() {
         return nestedCatalogJson.invoke();
     }
+
+    public CompletableFuture<byte[]> nestedCatalogJsonAsync() {
+        return nestedCatalogJson.invokeAsync();
+    }
 }
 ```
 
-Async invocation is available for handlers that return `CompletionStage`:
+Use `invoke()` for simple synchronous service code.
+
+Use `invokeAsync()` when your REST framework handler can return `CompletionStage`. That keeps request workers from waiting on the Dubbo response.
+
+### 6. Use It From A Handler Or Service
+
+Example with a raw JSON response:
 
 ```java
-public CompletionStage<byte[]> nestedCatalogJsonAsync() {
-    return nestedCatalogJson.invokeAsync();
+import com.reactor.rust.annotations.RustRoute;
+import com.reactor.rust.di.annotation.Autowired;
+import com.reactor.rust.http.RawResponse;
+import com.reactor.rust.http.ResponseEntity;
+
+import java.util.concurrent.CompletableFuture;
+
+public final class CatalogHandler {
+    @Autowired
+    private CatalogClient catalogClient;
+
+    @RustRoute(
+            method = "GET",
+            path = "/api/v1/catalog",
+            responseType = RawResponse.class
+    )
+    public CompletableFuture<ResponseEntity<RawResponse>> catalog() {
+        return catalogClient.nestedCatalogJsonAsync()
+                .thenApply(json -> ResponseEntity.ok(RawResponse.json(json)));
+    }
 }
 ```
 
-## Configuration
+If the provider is down or overloaded, handle the failed future and return a controlled HTTP response from your application layer.
 
-| Property | Default | Purpose |
-| --- | ---: | --- |
-| `reactor.dubbo.transport` | `native` | `native` uses Rust data-plane; `official` uses the optional Apache Dubbo stack. |
-| `reactor.dubbo.providers` | empty | Static `host:port` list. When set, Java ZooKeeper is not started. |
-| `reactor.dubbo.registry-address` | `zookeeper://127.0.0.1:2181` | Used only when static providers are not configured. |
-| `reactor.dubbo.registry-root` | `dubbo` | ZooKeeper provider root. |
-| `reactor.dubbo.timeout-ms` | `1000` | Per-call timeout. |
-| `reactor.dubbo.retries` | `0` | Hidden retries are disabled by default to protect p99. |
-| `reactor.dubbo.max-inflight` | `256` | Per-reference native bulkhead. |
-| `reactor.dubbo.max-response-bytes` | `8388608` | Native response frame cap. |
-| `reactor.dubbo.native-connections-per-endpoint` | `16` | Rust keepalive pool cap per provider endpoint. |
-| `reactor.dubbo.native-async-workers` | `2` | Native async worker count. Raise in balanced/throughput profiles. |
-| `reactor.dubbo.native-async-queue-capacity` | `128` | Bounded native async queue. Full queue fails fast. |
-| `reactor.dubbo.cluster` | `failfast` | Lite adapter supports `failfast` and `failover`. |
-| `reactor.dubbo.loadbalance` | `random` | Lite adapter supports `random` and `roundrobin`. |
+### 7. Add A Route-Level Limit
 
-System properties and environment variables override supplied `Properties`.
+Native limits protect the Dubbo client. Your HTTP route should also have its own concurrency policy.
 
-## Native vs Official Mode
+Use a small route-level bulkhead when low RSS matters. Use a larger but still bounded limit for balanced throughput. Avoid unbounded queues.
 
-Native mode avoids loading these into the hot JVM for the supported fast path: official Dubbo `ReferenceConfig`, `RegistryProtocol`, `RegistryDirectory`, Curator, Dubbo cluster wrappers, official remoting, Netty, Java ZooKeeper client, Hessian Lite, Dubbo REST, Triple/protobuf, config-center, metadata-center, metrics/tracing modules, and transport proxy/epoll extras.
+### 8. Verify Before Production
 
-Official mode remains available as an explicit fallback. Use it only when you accept the RSS/classpath overhead in exchange for full Dubbo behavior.
+Before shipping:
 
-## Operational Rules
+- Start the app with Dubbo disabled and measure RSS.
+- Start the app with Dubbo enabled and measure RSS.
+- Call the Dubbo endpoint under c64, c256, c512, and c1000 load.
+- Restart the provider and confirm reconnect behavior.
+- Make the provider slow and confirm timeout behavior.
+- Confirm shutdown releases the native client.
 
-- Keep `retries=0` unless the provider method is idempotent.
-- Keep response sizes bounded with `max-response-bytes`.
-- Use static providers or service-DNS when low RSS matters more than ZooKeeper governance.
-- Add application-level readiness checks if `check=false` is used.
-- Prefer `NativeDubboMethodInvoker` over dynamic proxies on request hot paths.
-- Tune `native-async-workers`, `native-connections-per-endpoint`, and route-level bulkheads together; increasing workers alone does not guarantee lower p99.
-- Close `NativeDubboConsumerClient` on shutdown so native clients and provider watchers are released.
+## Configuration Reference
 
-## Not Supported By Design
+All properties start with `reactor.dubbo.`.
+
+Values can come from a supplied `Properties` object, Java system properties, or environment variables. System properties and environment variables override the supplied `Properties`.
+
+For environment variables, use uppercase and replace `.` / `-` with `_`.
+
+Example:
+
+```text
+REACTOR_DUBBO_TIMEOUT_MS=1000
+REACTOR_DUBBO_NATIVE_ASYNC_WORKERS=8
+```
+
+### Basic Properties
+
+| Property | Default | What It Does | When To Change It |
+| --- | ---: | --- | --- |
+| `reactor.dubbo.application-name` | `rust-java-rest-dubbo-consumer` | Name used by the consumer. Mostly useful for diagnostics and official-mode metadata. | Change it to your service name, for example `orders-api`. |
+| `reactor.dubbo.transport` | `native` | Chooses the transport. `native` uses Rust; `official` uses the optional Apache Dubbo stack. | Keep `native` for low RSS. Use `official` only when you need full Dubbo behavior. |
+| `reactor.dubbo.providers` | empty | Static provider list in `host:port,host2:port` format. When set, Java ZooKeeper is not started. | Set this in Kubernetes/service-DNS/sidecar mode. This is the simplest low-RSS path. |
+| `reactor.dubbo.registry-address` | `zookeeper://127.0.0.1:2181` | ZooKeeper address used only when `providers` is empty. | Change it only if you want ZooKeeper discovery. |
+| `reactor.dubbo.registry-root` | `dubbo` | Root path for provider nodes in ZooKeeper. | Change it if your Dubbo providers are registered under a custom root. |
+| `reactor.dubbo.registry-check` | `false` | Controls whether registry availability should be treated as startup-critical in discovery mode. | Keep `false` for rolling deployments. Use readiness checks if startup must fail when registry is missing. |
+
+### Call Behavior
+
+| Property | Default | What It Does | When To Change It |
+| --- | ---: | --- | --- |
+| `reactor.dubbo.timeout-ms` | `1000` | Per-call timeout. It bounds how long the consumer waits for a provider response. | Lower it for strict p99. Raise it only if the provider normally needs more time. |
+| `reactor.dubbo.retries` | `0` | Number of extra attempts after a failed call. | Keep `0` unless the provider method is idempotent. Retries can multiply load and increase p99. |
+| `reactor.dubbo.check` | `false` | Controls whether a reference should require provider availability during startup. | Keep `false` for rolling provider restarts. Add application readiness checks if the dependency is mandatory. |
+| `reactor.dubbo.lazy` | `false` | Indicates lazy reference behavior for official-style compatibility. Native static mode still creates the native client when the reference is used. | Use only if you need delayed reference behavior. |
+| `reactor.dubbo.protocol` | `dubbo` | Protocol name expected by classic Dubbo providers. | Usually do not change. |
+| `reactor.dubbo.serialization` | `hessian2` | Serialization name used by classic Dubbo. | Keep `hessian2` for current native mode. |
+| `reactor.dubbo.cluster` | `failfast` | Supported values are `failfast` and `failover`. | Use `failfast` for predictable latency. Use `failover` only for idempotent calls. |
+| `reactor.dubbo.loadbalance` | `random` | Supported values are `random` and `roundrobin`. | Use `random` by default. Use `roundrobin` when you want simple even distribution. |
+
+### Native Resource Limits
+
+| Property | Default | What It Does | When To Change It |
+| --- | ---: | --- | --- |
+| `reactor.dubbo.max-inflight` | `256` | Max concurrent native Dubbo calls per reference. This is a bulkhead. | Lower it for low RSS and fail-fast behavior. Raise it only with enough provider capacity. |
+| `reactor.dubbo.max-response-bytes` | `8388608` | Max Dubbo response frame size accepted by native mode. | Raise it only if your provider really returns larger payloads. Prefer streaming or smaller responses when possible. |
+| `reactor.dubbo.native-connections-per-endpoint` | `16` | Max keepalive TCP connections per provider endpoint. One connection carries one in-flight call at a time. | Low RSS can use `2`. Balanced throughput often uses `16`. |
+| `reactor.dubbo.native-async-workers` | `2` | Native worker count used for async Dubbo calls. | Low RSS can keep this small. Balanced throughput should raise it with load tests. |
+| `reactor.dubbo.native-async-queue-capacity` | `128` | Bounded queue for native async calls. If full, calls fail fast instead of growing memory. | Keep bounded. Raise together with workers and route-level limits. |
+
+### ZooKeeper And Official-Mode Properties
+
+| Property | Default | What It Does | When To Change It |
+| --- | ---: | --- | --- |
+| `reactor.dubbo.registry-timeout-ms` | `3000` | Timeout for ZooKeeper connection/operations. | Change only in ZooKeeper discovery mode. |
+| `reactor.dubbo.registry-session-timeout-ms` | `30000` | ZooKeeper session timeout. | Change only if your registry environment requires it. |
+| `reactor.dubbo.connections` | `1` | Official-mode connection setting. Native mode uses `native-connections-per-endpoint` instead. | Mostly relevant for official mode. |
+| `reactor.dubbo.share-connections` | `1` | Official-mode shared connection setting. | Mostly relevant for official mode. |
+| `reactor.dubbo.refer-thread-num` | `1` | Worker count for provider refresh in ZooKeeper mode. It is not a request worker pool. | Keep small unless you have many references refreshing at once. |
+| `reactor.dubbo.runtime-profile` | `low-rss` | Descriptive profile value. Host applications may map it to runtime presets. | Use `low-rss`, `balanced-dubbo`, `throughput`, or `default` according to your deployment profile. |
+
+## Suggested Starting Profiles
+
+Low RSS:
+
+```properties
+reactor.dubbo.transport=native
+reactor.dubbo.providers=provider-1:20880
+reactor.dubbo.retries=0
+reactor.dubbo.timeout-ms=800
+reactor.dubbo.max-inflight=64
+reactor.dubbo.native-connections-per-endpoint=2
+reactor.dubbo.native-async-workers=2
+reactor.dubbo.native-async-queue-capacity=64
+```
+
+Balanced:
+
+```properties
+reactor.dubbo.transport=native
+reactor.dubbo.providers=provider-1:20880,provider-2:20880
+reactor.dubbo.retries=0
+reactor.dubbo.timeout-ms=1200
+reactor.dubbo.max-inflight=512
+reactor.dubbo.native-connections-per-endpoint=16
+reactor.dubbo.native-async-workers=8
+reactor.dubbo.native-async-queue-capacity=1024
+```
+
+Use low RSS when memory is the first priority and overload can return controlled 503 responses.
+
+Use balanced when Dubbo throughput matters more and you have enough provider capacity.
+
+## Native Mode vs Official Mode
+
+Native mode is the default because it keeps the hot JVM smaller. It avoids loading the official Dubbo `ReferenceConfig`, registry directory, official remoting, Netty, Java ZooKeeper client, Hessian Lite on the hot no-arg `byte[]` path, config-center, metadata-center, tracing, metrics modules, and extra transport codecs.
+
+Official mode is still useful when correctness depends on full Dubbo behavior. If you use official mode, add the required optional dependencies explicitly and expect higher RSS.
+
+## Current Native-Mode Limits
+
+Native mode is intentionally focused. It does not currently implement:
 
 - Dubbo config-center and metadata-center.
 - Consumer registration under `/consumers`.
-- Official Dubbo router/governance rules in native mode.
-- Triple, REST protocol, HTTP/2, callback, generic invocation, and full filter chain compatibility.
-- Multiplexed Dubbo request demux over one connection. Native mode uses bounded keepalive TCP connections with one in-flight call per connection.
+- Official Dubbo routers and governance rules.
+- Triple, REST protocol, HTTP/2, callbacks, generic invocation, or full official filter-chain behavior.
+- Multiplexed request demux over a single Dubbo connection.
 
-If you need those features, use the official Dubbo stack outside the low-RSS hot REST service, or isolate it behind a sidecar/internal service.
+For many REST-to-Dubbo consumer cases this is enough. If your system depends on the missing features, use official mode or put a full Dubbo integration service behind a smaller REST process.
 
 ## Build
 
