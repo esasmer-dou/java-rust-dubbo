@@ -1,0 +1,10 @@
+target/
+.idea/
+.vscode/
+.settings/
+.classpath
+.project
+*.iml
+*.log
+hs_err_pid*
+replay_pid*
