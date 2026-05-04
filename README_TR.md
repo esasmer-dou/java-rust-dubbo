@@ -40,7 +40,7 @@ ANTI-PATTERN: Sadece basit consumer cagri ihtiyaci icin Dubbo Spring Boot starte
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>3.1.0-rc1</version>
+  <version>0.1.0-rc1</version>
 </dependency>
 ```
 
@@ -106,5 +106,5 @@ mvn clean verify
 
 Uretilen paketler:
 
-- `target/java-rust-dubbo-3.1.0-rc1.jar`
-- `target/java-rust-dubbo-3.1.0-rc1-sources.jar`
+- `target/java-rust-dubbo-0.1.0-rc1.jar`
+- `target/java-rust-dubbo-0.1.0-rc1-sources.jar`

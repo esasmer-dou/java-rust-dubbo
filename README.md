@@ -41,7 +41,7 @@ ANTI-PATTERN: adding Dubbo Spring Boot starters or `dubbo-config-api` into the h
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>3.1.0-rc1</version>
+  <version>0.1.0-rc1</version>
 </dependency>
 ```
 
@@ -161,11 +161,11 @@ mvn clean verify
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-3.1.0-rc1.jar`
-- `java-rust-dubbo-3.1.0-rc1-sources.jar`
+- `java-rust-dubbo-0.1.0-rc1.jar`
+- `java-rust-dubbo-0.1.0-rc1-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v3.1.0-rc1.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.1.0-rc1.md)
 - [Turkish README](README_TR.md)

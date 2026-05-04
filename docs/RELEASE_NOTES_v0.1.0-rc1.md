@@ -1,4 +1,4 @@
-# java-rust-dubbo 3.1.0-rc1
+# java-rust-dubbo 0.1.0-rc1
 
 Release candidate for the minimal Dubbo consumer adapter used by the Java/Rust REST framework.
 
@@ -48,5 +48,5 @@ mvn clean verify
 
 Release artifacts:
 
-- `java-rust-dubbo-3.1.0-rc1.jar`
-- `java-rust-dubbo-3.1.0-rc1-sources.jar`
+- `java-rust-dubbo-0.1.0-rc1.jar`
+- `java-rust-dubbo-0.1.0-rc1-sources.jar`
