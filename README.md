@@ -33,6 +33,40 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 </dependency>
 ```
 
+This artifact is published to GitHub Packages, not Maven Central. If the repository or package is private, the consuming project must also declare the GitHub Packages Maven repository and authenticate with a GitHub personal access token.
+
+Add this repository to the consuming project's `pom.xml`:
+
+```xml
+<repositories>
+  <repository>
+    <id>github</id>
+    <name>GitHub Packages</name>
+    <url>https://maven.pkg.github.com/esasmer-dou/java-rust-dubbo</url>
+  </repository>
+</repositories>
+```
+
+Then add credentials to the consumer machine's `~/.m2/settings.xml`. The `<id>` must match the repository id above:
+
+```xml
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <servers>
+    <server>
+      <id>github</id>
+      <username>YOUR_GITHUB_USERNAME</username>
+      <password>${env.GITHUB_PACKAGES_TOKEN}</password>
+    </server>
+  </servers>
+</settings>
+```
+
+The token must be a classic GitHub PAT with `read:packages`. For private repositories, also grant repository access to the private repo, commonly through the `repo` scope. If your organization uses SSO, authorize the token for the organization. Do not put the token directly in `pom.xml`.
+
+If a collaborator can read the repository but still receives `401` or `404` from Maven, check the package settings on GitHub. The package should either inherit access from `esasmer-dou/java-rust-dubbo`, or the collaborator/team should be granted at least `Read` access to the package.
+
 In native mode this dependency is intentionally small. It does not pull ZooKeeper, Netty, Hessian Lite, or the official Dubbo client stack into your application unless you choose to add and use the official mode.
 
 The Java/Rust framework native library must also be present. In `rust-java-rest`, the framework loads that native library for you. In standalone tests, make sure `rust_hyper` is available through `java.library.path`.
@@ -44,6 +78,8 @@ This section shows the complete flow for adding a Dubbo consumer to a Java/Rust 
 ### 1. Add The Dependency
 
 Add the Maven dependency shown above to your application.
+
+If your application pulls from the private GitHub package, also add the GitHub Packages repository and `~/.m2/settings.xml` credentials from the Maven section. Adding only the dependency is not enough because Maven Central does not host this artifact.
 
 If your project is already using the Java/Rust REST framework, the native library is usually loaded by the framework. You do not need a Dubbo Spring Boot starter.
 

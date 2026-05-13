@@ -38,6 +38,40 @@ Su durumlarda resmi Dubbo stack daha dogru olabilir:
 </dependency>
 ```
 
+Bu artifact Maven Central'da degil, GitHub Packages uzerinde yayinlanir. Repo veya package private ise sadece dependency eklemek yetmez. Consumer projenin GitHub Packages Maven repository'sini tanimlamasi ve GitHub token ile authenticate olmasi gerekir.
+
+Consumer projenin `pom.xml` dosyasina repository ekleyin:
+
+```xml
+<repositories>
+  <repository>
+    <id>github</id>
+    <name>GitHub Packages</name>
+    <url>https://maven.pkg.github.com/esasmer-dou/java-rust-dubbo</url>
+  </repository>
+</repositories>
+```
+
+Consumer makinede `~/.m2/settings.xml` icine credential ekleyin. Buradaki `<id>`, `pom.xml` icindeki repository id ile ayni olmalidir:
+
+```xml
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+  <servers>
+    <server>
+      <id>github</id>
+      <username>YOUR_GITHUB_USERNAME</username>
+      <password>${env.GITHUB_PACKAGES_TOKEN}</password>
+    </server>
+  </servers>
+</settings>
+```
+
+Token classic GitHub PAT olmali ve `read:packages` scope'u tasimalidir. Private repo icin token'in private repo'ya da erisimi olmalidir; pratikte genelde `repo` scope'u da gerekir. Organization SSO kullaniyorsa token organization icin authorize edilmelidir. Token'i `pom.xml` icine yazmayin.
+
+Arkadasiniz repo'yu okuyabildigi halde Maven `401` veya `404` aliyorsa GitHub package ayarlarini kontrol edin. Package ya `esasmer-dou/java-rust-dubbo` reposundan access inherit etmeli ya da arkadasiniza/takimina package uzerinde en az `Read` yetkisi verilmelidir.
+
 Native modda bu dependency kucuk tutulur. Uygulamaniza ZooKeeper, Netty, Hessian Lite veya resmi Dubbo client stack otomatik olarak tasinmaz.
 
 Native modun calismasi icin Java/Rust framework native library de yuklu olmalidir. `rust-java-rest` icinde bu native library framework tarafindan yuklenir. Standalone testlerde `rust_hyper` kutuphanesini `java.library.path` ile gorunur hale getirmek gerekir.
@@ -49,6 +83,8 @@ Bu bolum, bir Java/Rust REST uygulamasini adim adim Dubbo consumer haline getiri
 ### 1. Dependency Ekleyin
 
 Yukaridaki Maven dependency'yi uygulama `pom.xml` dosyaniza ekleyin.
+
+Private GitHub package'tan cekiyorsaniz Maven bolumundeki GitHub Packages repository tanimini ve `~/.m2/settings.xml` credential ayarini da ekleyin. Sadece dependency eklemek yeterli degildir, cunku bu artifact Maven Central'da yoktur.
 
 Dubbo Spring Boot starter eklemeniz gerekmez. Bu kutuphane framework icinde acik bean/config mantigiyla kullanilir.
 
