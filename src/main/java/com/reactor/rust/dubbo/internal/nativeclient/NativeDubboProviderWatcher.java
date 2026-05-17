@@ -1,4 +1,11 @@
-package com.reactor.rust.dubbo;
+package com.reactor.rust.dubbo.internal.nativeclient;
+
+import com.reactor.rust.dubbo.DubboConsumerConfig;
+import com.reactor.rust.dubbo.DubboConsumerException;
+import com.reactor.rust.dubbo.DubboReferenceSpec;
+import com.reactor.rust.dubbo.NativeDubboBridge;
+import com.reactor.rust.dubbo.internal.registry.ProviderWatcher;
+import com.reactor.rust.dubbo.internal.registry.ZookeeperRegistryClient;
 
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.WatchedEvent;

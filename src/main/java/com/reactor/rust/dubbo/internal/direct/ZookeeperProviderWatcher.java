@@ -1,4 +1,12 @@
-package com.reactor.rust.dubbo;
+package com.reactor.rust.dubbo.internal.direct;
+
+import com.reactor.rust.dubbo.DubboConsumerConfig;
+import com.reactor.rust.dubbo.DubboConsumerException;
+import com.reactor.rust.dubbo.DubboReferenceSpec;
+import com.reactor.rust.dubbo.internal.registry.DubboUrlFactory;
+import com.reactor.rust.dubbo.internal.registry.ProviderWatcher;
+import com.reactor.rust.dubbo.internal.registry.ZookeeperRegistryClient;
+import com.reactor.rust.dubbo.internal.runtime.DubboRuntimeModel;
 
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.extension.ExtensionLoader;

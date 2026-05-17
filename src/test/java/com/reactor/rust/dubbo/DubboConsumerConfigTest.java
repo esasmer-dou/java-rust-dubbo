@@ -79,9 +79,4 @@ class DubboConsumerConfigTest {
         assertEquals("balanced-dubbo", config.runtimeProfile());
     }
 
-    @Test
-    void extractsZookeeperConnectString() {
-        assertEquals("zk-1:2181,zk-2:2181",
-                RegistryAddress.zookeeperConnectString("zookeeper://zk-1:2181,zk-2:2181?timeout=1000"));
-    }
 }

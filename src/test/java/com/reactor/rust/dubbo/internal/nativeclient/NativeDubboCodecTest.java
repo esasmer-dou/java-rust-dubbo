@@ -1,4 +1,4 @@
-package com.reactor.rust.dubbo;
+package com.reactor.rust.dubbo.internal.nativeclient;
 
 import com.alibaba.com.caucho.hessian.io.Hessian2Input;
 import com.alibaba.com.caucho.hessian.io.Hessian2Output;

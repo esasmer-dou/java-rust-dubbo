@@ -1,4 +1,12 @@
-package com.reactor.rust.dubbo;
+package com.reactor.rust.dubbo.internal.nativeclient;
+
+import com.reactor.rust.dubbo.DubboConsumerConfig;
+import com.reactor.rust.dubbo.DubboConsumerException;
+import com.reactor.rust.dubbo.DubboReferenceSpec;
+import com.reactor.rust.dubbo.NativeDubboBridge;
+import com.reactor.rust.dubbo.NativeDubboMethodInvoker;
+import com.reactor.rust.dubbo.internal.registry.ProviderWatcher;
+import com.reactor.rust.dubbo.internal.registry.ZookeeperRegistryClient;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
@@ -8,7 +16,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 
-final class NativeDubboReference<T> implements AutoCloseable {
+public final class NativeDubboReference<T> implements AutoCloseable {
 
     private final DubboConsumerConfig config;
     private final DubboReferenceSpec<T> spec;
@@ -18,7 +26,7 @@ final class NativeDubboReference<T> implements AutoCloseable {
     private final String staticProviders;
     private volatile T proxy;
 
-    NativeDubboReference(DubboConsumerConfig config, DubboReferenceSpec<T> spec) {
+    public NativeDubboReference(DubboConsumerConfig config, DubboReferenceSpec<T> spec) {
         this.config = Objects.requireNonNull(config, "config");
         this.spec = Objects.requireNonNull(spec, "spec");
         this.serviceInterface = spec.serviceInterface();
@@ -27,7 +35,7 @@ final class NativeDubboReference<T> implements AutoCloseable {
         this.staticProviders = config.providers();
     }
 
-    NativeDubboReference(
+    public NativeDubboReference(
             DubboConsumerConfig config,
             DubboReferenceSpec<T> spec,
             Object zookeeper,
@@ -45,7 +53,7 @@ final class NativeDubboReference<T> implements AutoCloseable {
         this.staticProviders = "";
     }
 
-    void start() {
+    public void start() {
         if (watcher == null) {
             NativeDubboBridge.updateProviders(nativeClientId, staticProviders);
         } else {
@@ -53,7 +61,7 @@ final class NativeDubboReference<T> implements AutoCloseable {
         }
     }
 
-    T proxy() {
+    public T proxy() {
         T current = proxy;
         if (current == null) {
             synchronized (this) {
@@ -67,7 +75,7 @@ final class NativeDubboReference<T> implements AutoCloseable {
         return current;
     }
 
-    <R> NativeDubboMethodInvoker<R> methodInvoker(String methodName, Class<R> returnType, Class<?>... parameterTypes) {
+    public <R> NativeDubboMethodInvoker<R> methodInvoker(String methodName, Class<R> returnType, Class<?>... parameterTypes) {
         Class<?>[] types = parameterTypes == null ? new Class<?>[0] : parameterTypes;
         try {
             return new NativeDubboMethodInvoker<>(

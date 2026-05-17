@@ -1,4 +1,4 @@
-package com.reactor.rust.dubbo;
+package com.reactor.rust.dubbo.internal.runtime;
 
 import org.apache.dubbo.common.ssl.CertManager;
 import org.apache.dubbo.common.serialize.hessian2.Hessian2FactoryManager;
@@ -8,11 +8,11 @@ import org.apache.dubbo.rpc.model.FrameworkModel;
 import org.apache.dubbo.rpc.model.ApplicationModel;
 import org.apache.dubbo.rpc.model.ModuleModel;
 
-final class DubboRuntimeModel {
+public final class DubboRuntimeModel {
 
     private DubboRuntimeModel() {}
 
-    static ModuleModel module() {
+    public static ModuleModel module() {
         ApplicationModel application = ApplicationModel.defaultModel();
         FrameworkModel framework = application.getFrameworkModel();
         framework.getBeanFactory().getOrRegisterBean(FrameworkExecutorRepository.class);

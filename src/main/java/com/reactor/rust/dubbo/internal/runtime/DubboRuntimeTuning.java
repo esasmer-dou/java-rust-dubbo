@@ -1,15 +1,18 @@
-package com.reactor.rust.dubbo;
+package com.reactor.rust.dubbo.internal.runtime;
+
+import com.reactor.rust.dubbo.DubboConsumerConfig;
+import com.reactor.rust.dubbo.DubboConsumerException;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
-final class DubboRuntimeTuning {
+public final class DubboRuntimeTuning {
 
     private static final AtomicReference<String> APPLIED_PROFILE = new AtomicReference<>();
 
     private DubboRuntimeTuning() {}
 
-    static void apply(DubboConsumerConfig config) {
+    public static void apply(DubboConsumerConfig config) {
         Objects.requireNonNull(config, "config");
         String profile = config.runtimeProfile();
         String previous = APPLIED_PROFILE.get();

@@ -1,16 +1,23 @@
-package com.reactor.rust.dubbo;
+package com.reactor.rust.dubbo.internal.direct;
+
+import com.reactor.rust.dubbo.DubboConsumerConfig;
+import com.reactor.rust.dubbo.DubboConsumerException;
+import com.reactor.rust.dubbo.DubboMethodInvoker;
+import com.reactor.rust.dubbo.DubboReferenceSpec;
+import com.reactor.rust.dubbo.internal.registry.ProviderWatcher;
+import com.reactor.rust.dubbo.internal.registry.ZookeeperRegistryClient;
 
 import java.lang.reflect.Proxy;
 import java.util.concurrent.Executor;
 
-final class DirectDubboReference<T> implements AutoCloseable {
+public final class DirectDubboReference<T> implements AutoCloseable {
 
     private final Class<T> serviceInterface;
     private final MinimalDubboInvoker<T> invoker;
     private final ProviderWatcher watcher;
     private volatile T proxy;
 
-    DirectDubboReference(
+    public DirectDubboReference(
             DubboConsumerConfig config,
             DubboReferenceSpec<T> spec,
             Object zookeeper,
@@ -25,11 +32,11 @@ final class DirectDubboReference<T> implements AutoCloseable {
                 invoker);
     }
 
-    void start() {
+    public void start() {
         watcher.start();
     }
 
-    T proxy() {
+    public T proxy() {
         T current = proxy;
         if (current == null) {
             synchronized (this) {
@@ -43,7 +50,7 @@ final class DirectDubboReference<T> implements AutoCloseable {
         return current;
     }
 
-    <R> DubboMethodInvoker<R> methodInvoker(String methodName, Class<R> returnType, Class<?>... parameterTypes) {
+    public <R> DubboMethodInvoker<R> methodInvoker(String methodName, Class<R> returnType, Class<?>... parameterTypes) {
         Class<?>[] types = parameterTypes == null ? new Class<?>[0] : parameterTypes;
         try {
             return new DubboMethodInvoker<>(

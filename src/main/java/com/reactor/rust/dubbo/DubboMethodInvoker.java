@@ -1,5 +1,8 @@
 package com.reactor.rust.dubbo;
 
+import com.reactor.rust.dubbo.internal.direct.MinimalDubboInvoker;
+import com.reactor.rust.dubbo.internal.runtime.DubboRuntimeModel;
+
 import org.apache.dubbo.common.utils.ReflectUtils;
 import org.apache.dubbo.rpc.RpcInvocation;
 import org.apache.dubbo.rpc.model.ServiceModel;
@@ -23,7 +26,7 @@ public final class DubboMethodInvoker<R> {
     private final String parameterTypesDesc;
     private final Type[] returnTypes;
 
-    DubboMethodInvoker(
+    public DubboMethodInvoker(
             Class<?> serviceInterface,
             MinimalDubboInvoker<?> invoker,
             Method method,

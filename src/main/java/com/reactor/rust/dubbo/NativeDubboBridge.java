@@ -15,7 +15,7 @@ public final class NativeDubboBridge {
         loadNativeLibrary();
     }
 
-    static int createClient(int timeoutMs, int maxInflight, int maxResponseBytes, int maxConnectionsPerEndpoint) {
+    public static int createClient(int timeoutMs, int maxInflight, int maxResponseBytes, int maxConnectionsPerEndpoint) {
         int id = nativeCreateClient(timeoutMs, maxInflight, maxResponseBytes, maxConnectionsPerEndpoint);
         if (id <= 0) {
             throw new DubboConsumerException("Failed to create native Dubbo client");
@@ -23,19 +23,19 @@ public final class NativeDubboBridge {
         return id;
     }
 
-    static int updateProviders(int clientId, String providers) {
+    public static int updateProviders(int clientId, String providers) {
         return nativeUpdateProviders(clientId, providers == null ? "" : providers);
     }
 
-    static void configureAsync(int workers, int queueCapacity) {
+    public static void configureAsync(int workers, int queueCapacity) {
         nativeConfigureAsync(workers, queueCapacity);
     }
 
-    static byte[] invoke(int clientId, byte[] requestBody, int timeoutMs) {
+    public static byte[] invoke(int clientId, byte[] requestBody, int timeoutMs) {
         return nativeInvoke(clientId, requestBody, timeoutMs);
     }
 
-    static CompletableFuture<byte[]> invokeAsync(int clientId, byte[] requestBody, int timeoutMs) {
+    public static CompletableFuture<byte[]> invokeAsync(int clientId, byte[] requestBody, int timeoutMs) {
         long callbackId = CALLBACK_IDS.getAndIncrement();
         CompletableFuture<byte[]> future = new CompletableFuture<>();
         PENDING.put(callbackId, future);
@@ -48,7 +48,7 @@ public final class NativeDubboBridge {
     }
 
     @SuppressWarnings("unchecked")
-    static <R> R invokeByteArrayNoArgs(
+    public static <R> R invokeByteArrayNoArgs(
             int clientId,
             String serviceName,
             String group,
@@ -58,7 +58,7 @@ public final class NativeDubboBridge {
         return (R) nativeInvokeByteArrayNoArgs(clientId, serviceName, group, version, methodName, timeoutMs);
     }
 
-    static CompletableFuture<byte[]> invokeByteArrayNoArgsAsync(
+    public static CompletableFuture<byte[]> invokeByteArrayNoArgsAsync(
             int clientId,
             String serviceName,
             String group,
@@ -83,7 +83,7 @@ public final class NativeDubboBridge {
         return future;
     }
 
-    static void closeClient(int clientId) {
+    public static void closeClient(int clientId) {
         nativeCloseClient(clientId);
     }
 

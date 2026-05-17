@@ -1,4 +1,7 @@
-package com.reactor.rust.dubbo;
+package com.reactor.rust.dubbo.internal.registry;
+
+import com.reactor.rust.dubbo.DubboConsumerConfig;
+import com.reactor.rust.dubbo.DubboConsumerException;
 
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
@@ -13,7 +16,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
-final class ZookeeperRegistryClient implements AutoCloseable, Watcher {
+public final class ZookeeperRegistryClient implements AutoCloseable, Watcher {
 
     private final DubboConsumerConfig config;
     private final Executor refreshExecutor;
@@ -22,31 +25,31 @@ final class ZookeeperRegistryClient implements AutoCloseable, Watcher {
     private volatile CountDownLatch connectedLatch = new CountDownLatch(1);
     private volatile boolean closed;
 
-    ZookeeperRegistryClient(DubboConsumerConfig config, Executor refreshExecutor) {
+    public ZookeeperRegistryClient(DubboConsumerConfig config, Executor refreshExecutor) {
         this.config = config;
         this.refreshExecutor = refreshExecutor;
     }
 
-    void start() {
+    public void start() {
         reconnect();
         if (config.registryCheck()) {
             awaitConnected();
         }
     }
 
-    List<String> getChildren(String path, Watcher watcher) throws Exception {
+    public List<String> getChildren(String path, Watcher watcher) throws Exception {
         return current().getChildren(path, watcher);
     }
 
-    Stat exists(String path, Watcher watcher) throws Exception {
+    public Stat exists(String path, Watcher watcher) throws Exception {
         return current().exists(path, watcher);
     }
 
-    void registerRefresh(Runnable listener) {
+    public void registerRefresh(Runnable listener) {
         refreshListeners.add(listener);
     }
 
-    void unregisterRefresh(Runnable listener) {
+    public void unregisterRefresh(Runnable listener) {
         refreshListeners.remove(listener);
     }
 

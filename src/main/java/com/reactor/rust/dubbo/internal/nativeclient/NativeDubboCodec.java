@@ -1,4 +1,6 @@
-package com.reactor.rust.dubbo;
+package com.reactor.rust.dubbo.internal.nativeclient;
+
+import com.reactor.rust.dubbo.DubboConsumerException;
 
 import com.alibaba.com.caucho.hessian.io.Hessian2Input;
 import com.alibaba.com.caucho.hessian.io.Hessian2Output;
@@ -9,7 +11,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-final class NativeDubboCodec {
+public final class NativeDubboCodec {
 
     private static final String DUBBO_PROTOCOL_VERSION = "2.0.2";
     private static final int RESPONSE_WITH_EXCEPTION = 0;
@@ -21,7 +23,7 @@ final class NativeDubboCodec {
 
     private NativeDubboCodec() {}
 
-    static byte[] encodeRequest(MethodPlan plan, Object[] args, int timeoutMs) {
+    public static byte[] encodeRequest(MethodPlan plan, Object[] args, int timeoutMs) {
         try {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream(256);
             Hessian2Output out = new Hessian2Output(bytes);
@@ -43,7 +45,7 @@ final class NativeDubboCodec {
     }
 
     @SuppressWarnings("unchecked")
-    static <R> R decodeResponse(byte[] body, MethodPlan plan) {
+    public static <R> R decodeResponse(byte[] body, MethodPlan plan) {
         try {
             Hessian2Input in = new Hessian2Input(new ByteArrayInputStream(body));
             int flag = in.readInt();
@@ -100,7 +102,7 @@ final class NativeDubboCodec {
         return map;
     }
 
-    record MethodPlan(
+    public record MethodPlan(
             String serviceName,
             String group,
             String version,

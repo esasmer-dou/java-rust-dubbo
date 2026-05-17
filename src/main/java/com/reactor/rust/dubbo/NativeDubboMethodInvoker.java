@@ -1,5 +1,8 @@
 package com.reactor.rust.dubbo;
 
+import com.reactor.rust.dubbo.internal.nativeclient.NativeDubboCodec;
+import com.reactor.rust.dubbo.internal.nativeclient.NativeDubboDescriptor;
+
 import java.lang.reflect.Method;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -21,7 +24,7 @@ public final class NativeDubboMethodInvoker<R> {
     private volatile NativeDubboCodec.MethodPlan legacyPlan;
     private volatile byte[] precomputedNoArgRequestBody;
 
-    NativeDubboMethodInvoker(
+    public NativeDubboMethodInvoker(
             int clientId,
             DubboConsumerConfig config,
             DubboReferenceSpec<?> spec,

@@ -1,4 +1,7 @@
-package com.reactor.rust.dubbo;
+package com.reactor.rust.dubbo.internal.registry;
+
+import com.reactor.rust.dubbo.DubboConsumerConfig;
+import com.reactor.rust.dubbo.DubboReferenceSpec;
 
 import org.apache.dubbo.common.URL;
 import org.junit.jupiter.api.Test;
@@ -36,6 +39,12 @@ class DubboUrlFactoryTest {
         assertTrue(DubboUrlFactory.accepts(config, spec, accepted));
         assertFalse(DubboUrlFactory.accepts(config, spec, wrongVersion));
         assertFalse(DubboUrlFactory.accepts(config, spec, disabled));
+    }
+
+    @Test
+    void extractsZookeeperConnectString() {
+        assertEquals("zk-1:2181,zk-2:2181",
+                RegistryAddress.zookeeperConnectString("zookeeper://zk-1:2181,zk-2:2181?timeout=1000"));
     }
 
     interface RemoteBillingService {

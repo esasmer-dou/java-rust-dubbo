@@ -1,10 +1,10 @@
-package com.reactor.rust.dubbo;
+package com.reactor.rust.dubbo.internal.nativeclient;
 
-final class NativeDubboDescriptor {
+public final class NativeDubboDescriptor {
 
     private NativeDubboDescriptor() {}
 
-    static String parameterTypesDesc(Class<?>[] parameterTypes) {
+    public static String parameterTypesDesc(Class<?>[] parameterTypes) {
         if (parameterTypes == null || parameterTypes.length == 0) {
             return "";
         }

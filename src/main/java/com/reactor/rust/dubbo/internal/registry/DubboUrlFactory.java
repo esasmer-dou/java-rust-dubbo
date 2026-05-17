@@ -1,11 +1,15 @@
-package com.reactor.rust.dubbo;
+package com.reactor.rust.dubbo.internal.registry;
+
+import com.reactor.rust.dubbo.DubboConsumerConfig;
+import com.reactor.rust.dubbo.DubboReferenceSpec;
+import com.reactor.rust.dubbo.internal.runtime.DubboRuntimeModel;
 
 import org.apache.dubbo.common.URL;
 
 import java.util.HashMap;
 import java.util.Map;
 
-final class DubboUrlFactory {
+public final class DubboUrlFactory {
 
     private static final String APPLICATION_KEY = "application";
     private static final String CATEGORY_KEY = "category";
@@ -30,12 +34,12 @@ final class DubboUrlFactory {
 
     private DubboUrlFactory() {}
 
-    static <T> URL consumerUrl(DubboConsumerConfig config, DubboReferenceSpec<T> spec) {
+    public static <T> URL consumerUrl(DubboConsumerConfig config, DubboReferenceSpec<T> spec) {
         Map<String, String> parameters = consumerParameters(config, spec);
         return scoped(new URL(CONSUMER_SIDE, "0.0.0.0", 0, spec.serviceInterface().getName(), parameters));
     }
 
-    static <T> URL providerUrl(DubboConsumerConfig config, DubboReferenceSpec<T> spec, URL providerUrl) {
+    public static <T> URL providerUrl(DubboConsumerConfig config, DubboReferenceSpec<T> spec, URL providerUrl) {
         Map<String, String> merged = new HashMap<>(providerUrl.getParameters());
         merged.putAll(consumerParameters(config, spec));
         merged.put(CHECK_KEY, "false");
@@ -47,12 +51,12 @@ final class DubboUrlFactory {
         return scoped(url);
     }
 
-    static <T> String providerPath(DubboConsumerConfig config, DubboReferenceSpec<T> spec) {
+    public static <T> String providerPath(DubboConsumerConfig config, DubboReferenceSpec<T> spec) {
         return "/" + config.registryRoot() + "/" + URL.encode(spec.serviceInterface().getName()) + "/"
                 + PROVIDERS_CATEGORY;
     }
 
-    static <T> boolean accepts(DubboConsumerConfig config, DubboReferenceSpec<T> spec, URL providerUrl) {
+    public static <T> boolean accepts(DubboConsumerConfig config, DubboReferenceSpec<T> spec, URL providerUrl) {
         String protocol = valueOrDefault(spec.protocol(), config.protocol());
         if (!protocol.equals(providerUrl.getProtocol())) {
             return false;

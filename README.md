@@ -29,7 +29,7 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.1.0-rc1</version>
+  <version>0.1.0-rc2</version>
 </dependency>
 ```
 
@@ -70,6 +70,20 @@ If a collaborator can read the repository but still receives `401` or `404` from
 In native mode this dependency is intentionally small. It does not pull ZooKeeper, Netty, Hessian Lite, or the official Dubbo client stack into your application unless you choose to add and use the official mode.
 
 The Java/Rust framework native library must also be present. In `rust-java-rest`, the framework loads that native library for you. In standalone tests, make sure `rust_hyper` is available through `java.library.path`.
+
+## Public API Boundary
+
+Use only the classes directly under `com.reactor.rust.dubbo` in application code, for example `DubboConsumerConfig`, `DubboReferenceSpec`, `NativeDubboConsumerClient`, `NativeDubboConsumers`, and `NativeDubboMethodInvoker`.
+
+Classes under `com.reactor.rust.dubbo.internal.*` are implementation details. They are separated by responsibility so the runtime is easier to maintain:
+
+- `internal.nativeclient`: native Dubbo transport reference, codec, descriptor, and native provider watcher.
+- `internal.direct`: optional official Dubbo direct invoker path.
+- `internal.registry`: ZooKeeper provider discovery and Dubbo URL helpers.
+- `internal.runtime`: Dubbo runtime model and low-RSS Netty tuning.
+- `internal.util`: small runtime utilities.
+
+Do not import `internal.*` from your service. Those packages can change between release candidates without source compatibility guarantees.
 
 ## Quick Start
 
@@ -364,11 +378,11 @@ mvn clean verify
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-0.1.0-rc1.jar`
-- `java-rust-dubbo-0.1.0-rc1-sources.jar`
+- `java-rust-dubbo-0.1.0-rc2.jar`
+- `java-rust-dubbo-0.1.0-rc2-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v0.1.0-rc1.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.1.0-rc2.md)
 - [Turkish README](README_TR.md)

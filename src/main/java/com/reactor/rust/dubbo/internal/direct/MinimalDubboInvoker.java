@@ -1,4 +1,8 @@
-package com.reactor.rust.dubbo;
+package com.reactor.rust.dubbo.internal.direct;
+
+import com.reactor.rust.dubbo.DubboConsumerConfig;
+import com.reactor.rust.dubbo.DubboReferenceSpec;
+import com.reactor.rust.dubbo.internal.registry.DubboUrlFactory;
 
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.rpc.Invocation;
@@ -11,7 +15,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 
-final class MinimalDubboInvoker<T> implements Invoker<T> {
+public final class MinimalDubboInvoker<T> implements Invoker<T> {
 
     private static final Endpoint<?>[] EMPTY_ENDPOINTS = new Endpoint<?>[0];
 

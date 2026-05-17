@@ -1,14 +1,14 @@
-package com.reactor.rust.dubbo;
+package com.reactor.rust.dubbo.internal.util;
 
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
-final class NamedDaemonThreadFactory implements ThreadFactory {
+public final class NamedDaemonThreadFactory implements ThreadFactory {
 
     private final String prefix;
     private final AtomicInteger sequence = new AtomicInteger();
 
-    NamedDaemonThreadFactory(String prefix) {
+    public NamedDaemonThreadFactory(String prefix) {
         this.prefix = prefix;
     }
 

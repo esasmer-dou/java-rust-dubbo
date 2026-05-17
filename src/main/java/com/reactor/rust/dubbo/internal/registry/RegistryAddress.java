@@ -1,11 +1,14 @@
-package com.reactor.rust.dubbo;
+package com.reactor.rust.dubbo.internal.registry;
 
 final class RegistryAddress {
 
     private RegistryAddress() {}
 
     static String zookeeperConnectString(String registryAddress) {
-        String value = DubboConsumerConfig.normalizeRegistryAddress(registryAddress);
+        String value = registryAddress == null ? "" : registryAddress.trim();
+        if (!value.contains("://")) {
+            value = "zookeeper://" + value;
+        }
         int scheme = value.indexOf("://");
         if (scheme >= 0) {
             value = value.substring(scheme + 3);

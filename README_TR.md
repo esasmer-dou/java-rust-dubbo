@@ -34,7 +34,7 @@ Su durumlarda resmi Dubbo stack daha dogru olabilir:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.1.0-rc1</version>
+  <version>0.1.0-rc2</version>
 </dependency>
 ```
 
@@ -75,6 +75,20 @@ Arkadasiniz repo'yu okuyabildigi halde Maven `401` veya `404` aliyorsa GitHub pa
 Native modda bu dependency kucuk tutulur. Uygulamaniza ZooKeeper, Netty, Hessian Lite veya resmi Dubbo client stack otomatik olarak tasinmaz.
 
 Native modun calismasi icin Java/Rust framework native library de yuklu olmalidir. `rust-java-rest` icinde bu native library framework tarafindan yuklenir. Standalone testlerde `rust_hyper` kutuphanesini `java.library.path` ile gorunur hale getirmek gerekir.
+
+## Public API Siniri
+
+Uygulama kodunda sadece dogrudan `com.reactor.rust.dubbo` altindaki siniflari kullanin. Ornek: `DubboConsumerConfig`, `DubboReferenceSpec`, `NativeDubboConsumerClient`, `NativeDubboConsumers` ve `NativeDubboMethodInvoker`.
+
+`com.reactor.rust.dubbo.internal.*` altindaki siniflar kutuphanenin kendi ic uygulama detayidir. Bu paketler sorumluluklara gore ayrilmistir:
+
+- `internal.nativeclient`: native Dubbo transport reference, codec, descriptor ve native provider watcher.
+- `internal.direct`: opsiyonel resmi Dubbo direct invoker yolu.
+- `internal.registry`: ZooKeeper provider discovery ve Dubbo URL yardimcilari.
+- `internal.runtime`: Dubbo runtime model ve low-RSS Netty tuning.
+- `internal.util`: kucuk runtime yardimcilari.
+
+Servis kodunuzda `internal.*` import etmeyin. Bu paketler release candidate surumleri arasinda degisebilir; source compatibility garantisi public root API icindir.
 
 ## Quick Start
 
@@ -377,5 +391,5 @@ mvn clean verify
 
 Uretilen paketler:
 
-- `target/java-rust-dubbo-0.1.0-rc1.jar`
-- `target/java-rust-dubbo-0.1.0-rc1-sources.jar`
+- `target/java-rust-dubbo-0.1.0-rc2.jar`
+- `target/java-rust-dubbo-0.1.0-rc2-sources.jar`

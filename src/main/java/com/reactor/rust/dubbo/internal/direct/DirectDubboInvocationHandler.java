@@ -1,4 +1,7 @@
-package com.reactor.rust.dubbo;
+package com.reactor.rust.dubbo.internal.direct;
+
+import com.reactor.rust.dubbo.DubboConsumerException;
+import com.reactor.rust.dubbo.internal.runtime.DubboRuntimeModel;
 
 import org.apache.dubbo.common.utils.ReflectUtils;
 import org.apache.dubbo.rpc.RpcInvocation;
