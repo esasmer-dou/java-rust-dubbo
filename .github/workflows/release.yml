@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version, for example 0.1.0-rc2"
+        description: "Release version, for example 0.1.0-rc3"
         required: true
         type: string
 
@@ -59,6 +59,7 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           mkdir -p release-assets
           cp "target/java-rust-dubbo-${VERSION}.jar" release-assets/
+          cp "target/java-rust-dubbo-${VERSION}-native-static.jar" release-assets/
           cp "target/java-rust-dubbo-${VERSION}-sources.jar" release-assets/
           (cd release-assets && sha256sum * > SHA256SUMS)
 

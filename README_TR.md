@@ -34,7 +34,7 @@ Su durumlarda resmi Dubbo stack daha dogru olabilir:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.1.0-rc2</version>
+  <version>0.1.0-rc3</version>
 </dependency>
 ```
 
@@ -73,6 +73,26 @@ Token classic GitHub PAT olmali ve `read:packages` scope'u tasimalidir. Private 
 Arkadasiniz repo'yu okuyabildigi halde Maven `401` veya `404` aliyorsa GitHub package ayarlarini kontrol edin. Package ya `esasmer-dou/java-rust-dubbo` reposundan access inherit etmeli ya da arkadasiniza/takimina package uzerinde en az `Read` yetkisi verilmelidir.
 
 Native modda bu dependency kucuk tutulur. Uygulamaniza ZooKeeper, Netty, Hessian Lite veya resmi Dubbo client stack otomatik olarak tasinmaz.
+
+En kucuk static-provider native kurulum icin full JAR yerine `native-static` classifier kullanabilirsiniz:
+
+```xml
+<dependency>
+  <groupId>com.reactor</groupId>
+  <artifactId>java-rust-dubbo</artifactId>
+  <version>0.1.0-rc3</version>
+  <classifier>native-static</classifier>
+</dependency>
+```
+
+Bu classifier'i sadece su kosullarda kullanin:
+
+- `reactor.dubbo.transport=native` kullaniyorsunuz.
+- `reactor.dubbo.providers=host:port,...` dolu.
+- Hot Dubbo methodunuz no-arg `byte[]` donen low-overhead path.
+- Consumer tarafinda Java ZooKeeper discovery, official Dubbo mode veya Java Hessian argument encode/decode gerekmiyor.
+
+ZooKeeper discovery, argumanli Dubbo methodlari, DTO decode, official Dubbo uyumlulugu veya full governance gerekiyorsa classifier kullanmayin. Normal dependency bu compatibility path'leri korur.
 
 Native modun calismasi icin Java/Rust framework native library de yuklu olmalidir. `rust-java-rest` icinde bu native library framework tarafindan yuklenir. Standalone testlerde `rust_hyper` kutuphanesini `java.library.path` ile gorunur hale getirmek gerekir.
 
@@ -391,5 +411,6 @@ mvn clean verify
 
 Uretilen paketler:
 
-- `target/java-rust-dubbo-0.1.0-rc2.jar`
-- `target/java-rust-dubbo-0.1.0-rc2-sources.jar`
+- `target/java-rust-dubbo-0.1.0-rc3.jar`
+- `target/java-rust-dubbo-0.1.0-rc3-native-static.jar`
+- `target/java-rust-dubbo-0.1.0-rc3-sources.jar`

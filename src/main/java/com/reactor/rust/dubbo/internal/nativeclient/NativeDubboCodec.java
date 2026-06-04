@@ -10,6 +10,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public final class NativeDubboCodec {
 
@@ -20,12 +21,25 @@ public final class NativeDubboCodec {
     private static final int RESPONSE_WITH_EXCEPTION_WITH_ATTACHMENTS = 3;
     private static final int RESPONSE_VALUE_WITH_ATTACHMENTS = 4;
     private static final int RESPONSE_NULL_VALUE_WITH_ATTACHMENTS = 5;
+    private static final int REQUEST_BUFFER_INITIAL_BYTES = Integer.getInteger(
+            "reactor.dubbo.hessian.request-buffer-initial-bytes",
+            256
+    );
+    private static final int REQUEST_BUFFER_RETAIN_MAX_BYTES = Integer.getInteger(
+            "reactor.dubbo.hessian.request-buffer-retain-max-bytes",
+            4 * 1024
+    );
+    private static final ThreadLocal<ReusableByteArrayOutputStream> REQUEST_BUFFER =
+            ThreadLocal.withInitial(() -> new ReusableByteArrayOutputStream(REQUEST_BUFFER_INITIAL_BYTES));
+    private static final ConcurrentHashMap<String, Map<String, Object>> ATTACHMENTS_CACHE =
+            new ConcurrentHashMap<>();
 
     private NativeDubboCodec() {}
 
     public static byte[] encodeRequest(MethodPlan plan, Object[] args, int timeoutMs) {
         try {
-            ByteArrayOutputStream bytes = new ByteArrayOutputStream(256);
+            ReusableByteArrayOutputStream bytes = REQUEST_BUFFER.get();
+            bytes.reset();
             Hessian2Output out = new Hessian2Output(bytes);
             out.writeString(DUBBO_PROTOCOL_VERSION);
             out.writeString(plan.serviceName);
@@ -37,7 +51,11 @@ public final class NativeDubboCodec {
             }
             out.writeObject(attachments(plan, timeoutMs));
             out.flush();
-            return bytes.toByteArray();
+            byte[] encoded = bytes.toByteArray();
+            if (bytes.capacity() > REQUEST_BUFFER_RETAIN_MAX_BYTES) {
+                REQUEST_BUFFER.set(new ReusableByteArrayOutputStream(REQUEST_BUFFER_INITIAL_BYTES));
+            }
+            return encoded;
         } catch (IOException e) {
             throw new DubboConsumerException("Failed to encode native Dubbo request for "
                     + plan.serviceName + "." + plan.methodName, e);
@@ -87,6 +105,14 @@ public final class NativeDubboCodec {
     }
 
     private static Map<String, Object> attachments(MethodPlan plan, int timeoutMs) {
+        String key = plan.serviceName + '\u0000'
+                + plan.group + '\u0000'
+                + plan.version + '\u0000'
+                + timeoutMs;
+        return ATTACHMENTS_CACHE.computeIfAbsent(key, ignored -> createAttachments(plan, timeoutMs));
+    }
+
+    private static Map<String, Object> createAttachments(MethodPlan plan, int timeoutMs) {
         Map<String, Object> map = new HashMap<>(8);
         map.put("interface", plan.serviceName);
         map.put("path", plan.serviceName);
@@ -99,7 +125,7 @@ public final class NativeDubboCodec {
         if (plan.version != null) {
             map.put("version", plan.version);
         }
-        return map;
+        return Map.copyOf(map);
     }
 
     public record MethodPlan(
@@ -110,4 +136,14 @@ public final class NativeDubboCodec {
             Class<?> returnType,
             Class<?>[] parameterTypes,
             String parameterTypesDesc) {}
+
+    private static final class ReusableByteArrayOutputStream extends ByteArrayOutputStream {
+        private ReusableByteArrayOutputStream(int size) {
+            super(Math.max(64, size));
+        }
+
+        private int capacity() {
+            return buf.length;
+        }
+    }
 }

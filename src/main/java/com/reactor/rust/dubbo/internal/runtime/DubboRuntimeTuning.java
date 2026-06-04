@@ -31,6 +31,11 @@ public final class DubboRuntimeTuning {
             return;
         }
         forceNoEpoll();
+        if (DubboConsumerConfig.RUNTIME_PROFILE_MICRO_DUBBO.equals(profile)) {
+            applyLowRssNettyAllocator();
+            applyMicroDubboRuntime();
+            return;
+        }
         if ("low-rss".equals(profile)) {
             applyLowRssNettyAllocator();
         }
@@ -49,6 +54,14 @@ public final class DubboRuntimeTuning {
         setIfAbsent("io.netty.allocator.normalCacheSize", "0");
         setIfAbsent("io.netty.allocator.useCacheForAllThreads", "false");
         setIfAbsent("io.netty.recycler.maxCapacityPerThread", "0");
+    }
+
+    private static void applyMicroDubboRuntime() {
+        setIfAbsent("io.netty.eventLoopThreads", "1");
+        setIfAbsent("io.netty.availableProcessors", "1");
+        setIfAbsent("dubbo.application.qos.enable", "false");
+        setIfAbsent("dubbo.metadata-report.cycle-report", "false");
+        setIfAbsent("dubbo.consumer.retries", "0");
     }
 
     private static void setIfAbsent(String key, String value) {

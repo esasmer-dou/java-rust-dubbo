@@ -123,12 +123,13 @@ public final class DubboConsumerClient implements AutoCloseable {
 
     private static ThreadPoolExecutor createRefreshExecutor(DubboConsumerConfig config) {
         int threads = Math.max(1, config.referThreadNum());
+        int queueCapacity = DubboConsumerConfig.RUNTIME_PROFILE_MICRO_DUBBO.equals(config.runtimeProfile()) ? 8 : 64;
         ThreadPoolExecutor executor = new ThreadPoolExecutor(
                 threads,
                 threads,
                 30L,
                 TimeUnit.SECONDS,
-                new ArrayBlockingQueue<>(64),
+                new ArrayBlockingQueue<>(queueCapacity),
                 new NamedDaemonThreadFactory("reactor-dubbo-zk-refresh"),
                 new ThreadPoolExecutor.CallerRunsPolicy());
         executor.allowCoreThreadTimeOut(true);

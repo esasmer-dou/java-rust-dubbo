@@ -14,7 +14,8 @@ public final class DubboConsumerConfig {
     public static final String DEFAULT_CLUSTER = "failfast";
     public static final String DEFAULT_LOADBALANCE = "random";
     public static final String DEFAULT_REGISTRY_ROOT = "dubbo";
-    public static final String DEFAULT_RUNTIME_PROFILE = "low-rss";
+    public static final String RUNTIME_PROFILE_MICRO_DUBBO = "micro-dubbo";
+    public static final String DEFAULT_RUNTIME_PROFILE = RUNTIME_PROFILE_MICRO_DUBBO;
     public static final String RUNTIME_PROFILE_BALANCED_DUBBO = "balanced-dubbo";
     public static final String DEFAULT_TRANSPORT = "native";
 
@@ -264,11 +265,12 @@ public final class DubboConsumerConfig {
     private static String normalizeRuntimeProfile(String profile) {
         String value = requireText(profile, "runtimeProfile").toLowerCase(Locale.ROOT);
         if (!"low-rss".equals(value)
+                && !RUNTIME_PROFILE_MICRO_DUBBO.equals(value)
                 && !RUNTIME_PROFILE_BALANCED_DUBBO.equals(value)
                 && !"throughput".equals(value)
                 && !"default".equals(value)) {
             throw new IllegalArgumentException(
-                    "runtimeProfile must be low-rss, balanced-dubbo, throughput, or default");
+                    "runtimeProfile must be micro-dubbo, low-rss, balanced-dubbo, throughput, or default");
         }
         return value;
     }
@@ -354,18 +356,18 @@ public final class DubboConsumerConfig {
         private boolean registryCheck;
         private String protocol = DEFAULT_PROTOCOL;
         private String serialization = DEFAULT_SERIALIZATION;
-        private int timeoutMs = 1_000;
+        private int timeoutMs = 800;
         private int retries;
         private boolean check;
         private boolean lazy;
         private int connections = 1;
         private int shareConnections = 1;
         private int referThreadNum = 1;
-        private int maxInflight = 256;
+        private int maxInflight = 32;
         private int maxResponseBytes = 8 * 1024 * 1024;
-        private int nativeConnectionsPerEndpoint = 16;
-        private int nativeAsyncWorkers = 2;
-        private int nativeAsyncQueueCapacity = 128;
+        private int nativeConnectionsPerEndpoint = 1;
+        private int nativeAsyncWorkers = 1;
+        private int nativeAsyncQueueCapacity = 32;
         private String runtimeProfile = DEFAULT_RUNTIME_PROFILE;
         private String transport = DEFAULT_TRANSPORT;
         private String cluster = DEFAULT_CLUSTER;

@@ -29,7 +29,7 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.1.0-rc2</version>
+  <version>0.1.0-rc3</version>
 </dependency>
 ```
 
@@ -69,6 +69,26 @@ If a collaborator can read the repository but still receives `401` or `404` from
 
 In native mode this dependency is intentionally small. It does not pull ZooKeeper, Netty, Hessian Lite, or the official Dubbo client stack into your application unless you choose to add and use the official mode.
 
+For the smallest static-provider native setup, use the `native-static` classifier instead of the full JAR:
+
+```xml
+<dependency>
+  <groupId>com.reactor</groupId>
+  <artifactId>java-rust-dubbo</artifactId>
+  <version>0.1.0-rc3</version>
+  <classifier>native-static</classifier>
+</dependency>
+```
+
+Use this classifier only when all of these are true:
+
+- You use `reactor.dubbo.transport=native`.
+- You set `reactor.dubbo.providers=host:port,...`.
+- Your hot Dubbo method is the low-overhead no-argument `byte[]` path.
+- You do not need Java ZooKeeper discovery, official Dubbo mode, or Java Hessian argument encode/decode in the consumer.
+
+If you need ZooKeeper discovery, argument-bearing Dubbo methods, DTO decoding, official Dubbo compatibility, or full governance behavior, use the normal dependency without the classifier. The normal artifact keeps those compatibility paths available.
+
 The Java/Rust framework native library must also be present. In `rust-java-rest`, the framework loads that native library for you. In standalone tests, make sure `rust_hyper` is available through `java.library.path`.
 
 ## Public API Boundary
@@ -102,23 +122,39 @@ If your project is already using the Java/Rust REST framework, the native librar
 For the lowest-RSS setup, start with native transport and static providers:
 
 ```properties
+reactor.runtime.profile=micro-dubbo
+reactor.dubbo.enabled=true
 reactor.dubbo.transport=native
+reactor.dubbo.runtime-profile=micro-dubbo
 reactor.dubbo.providers=catalog-provider:20880
-reactor.dubbo.timeout-ms=1000
+reactor.dubbo.timeout-ms=800
 reactor.dubbo.retries=0
-reactor.dubbo.max-inflight=256
+reactor.dubbo.max-inflight=32
 reactor.dubbo.max-response-bytes=8388608
-reactor.dubbo.native-connections-per-endpoint=16
-reactor.dubbo.native-async-workers=8
-reactor.dubbo.native-async-queue-capacity=1024
+reactor.dubbo.native-connections-per-endpoint=1
+reactor.dubbo.native-async-workers=1
+reactor.dubbo.native-async-queue-capacity=32
 ```
 
 What this means:
 
 - `transport=native` tells the library to use the Rust Dubbo data-plane.
+- `runtime-profile=micro-dubbo` keeps native workers, queues, refresh queues, and Netty fallback settings narrow.
 - `providers=host:port` tells the consumer where the provider is. With this set, Java ZooKeeper is not started.
 - `retries=0` keeps latency predictable and avoids duplicate provider calls.
 - `max-inflight` and native queue settings prevent unlimited memory growth under load.
+
+If you leave `reactor.dubbo.providers` empty, the client uses ZooKeeper discovery. That is supported, but it adds Java ZooKeeper classes and at least a small discovery thread footprint. Use it when provider failover must come from ZooKeeper; otherwise prefer static providers, Kubernetes service DNS, or a sidecar-generated provider list.
+
+For very small pods, also tune the host JVM. The library can keep Dubbo small, but OpenJ9 still needs
+an explicit small CPU view to avoid extra JVM worker/JIT footprint:
+
+```bash
+-Xms8m -Xmx48m -Xss256k -Xquickstart -Xtune:virtualized -Xshareclasses:none -XX:ActiveProcessorCount=1
+```
+
+For very low traffic services only, adding `-Xnojit` can reduce RSS further. It is not a general
+throughput default; measure RPC p99 and CPU before using it in production.
 
 ### 3. Define The Dubbo Service Interface
 
@@ -322,22 +358,24 @@ REACTOR_DUBBO_NATIVE_ASYNC_WORKERS=8
 
 ## Suggested Starting Profiles
 
-Low RSS:
+Micro Dubbo / lowest RSS:
 
 ```properties
+reactor.dubbo.runtime-profile=micro-dubbo
 reactor.dubbo.transport=native
 reactor.dubbo.providers=provider-1:20880
 reactor.dubbo.retries=0
 reactor.dubbo.timeout-ms=800
-reactor.dubbo.max-inflight=64
-reactor.dubbo.native-connections-per-endpoint=2
-reactor.dubbo.native-async-workers=2
-reactor.dubbo.native-async-queue-capacity=64
+reactor.dubbo.max-inflight=32
+reactor.dubbo.native-connections-per-endpoint=1
+reactor.dubbo.native-async-workers=1
+reactor.dubbo.native-async-queue-capacity=32
 ```
 
 Balanced:
 
 ```properties
+reactor.dubbo.runtime-profile=balanced-dubbo
 reactor.dubbo.transport=native
 reactor.dubbo.providers=provider-1:20880,provider-2:20880
 reactor.dubbo.retries=0
@@ -348,7 +386,7 @@ reactor.dubbo.native-async-workers=8
 reactor.dubbo.native-async-queue-capacity=1024
 ```
 
-Use low RSS when memory is the first priority and overload can return controlled 503 responses.
+Use micro Dubbo when memory is the first priority and overload can return controlled 503 responses.
 
 Use balanced when Dubbo throughput matters more and you have enough provider capacity.
 
@@ -378,11 +416,12 @@ mvn clean verify
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-0.1.0-rc2.jar`
-- `java-rust-dubbo-0.1.0-rc2-sources.jar`
+- `java-rust-dubbo-0.1.0-rc3.jar`
+- `java-rust-dubbo-0.1.0-rc3-native-static.jar`
+- `java-rust-dubbo-0.1.0-rc3-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v0.1.0-rc2.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.1.0-rc3.md)
 - [Turkish README](README_TR.md)

@@ -1,11 +1,12 @@
 package com.reactor.rust.dubbo;
 
-import com.reactor.rust.dubbo.internal.nativeclient.NativeDubboCodec;
+import com.reactor.rust.dubbo.internal.nativeclient.LegacyCodecSupport;
 import com.reactor.rust.dubbo.internal.nativeclient.NativeDubboDescriptor;
 
 import java.lang.reflect.Method;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 
 public final class NativeDubboMethodInvoker<R> {
 
@@ -21,7 +22,9 @@ public final class NativeDubboMethodInvoker<R> {
     private final Class<?>[] parameterTypes;
     private final String parameterTypesDesc;
     private final boolean nativeByteArrayNoArgs;
-    private volatile NativeDubboCodec.MethodPlan legacyPlan;
+    private final Supplier<NativeDubboMethodInvoker<R>> delegateSupplier;
+    private volatile NativeDubboMethodInvoker<R> delegate;
+    private volatile Object legacyPlan;
     private volatile byte[] precomputedNoArgRequestBody;
 
     public NativeDubboMethodInvoker(
@@ -40,6 +43,25 @@ public final class NativeDubboMethodInvoker<R> {
         this.parameterTypes = method.getParameterTypes();
         this.parameterTypesDesc = NativeDubboDescriptor.parameterTypesDesc(parameterTypes);
         this.nativeByteArrayNoArgs = this.returnType == byte[].class && this.parameterTypes.length == 0;
+        this.delegateSupplier = null;
+    }
+
+    private NativeDubboMethodInvoker(Supplier<NativeDubboMethodInvoker<R>> delegateSupplier) {
+        this.clientId = 0;
+        this.timeoutMs = 0;
+        this.serviceName = "";
+        this.group = null;
+        this.version = null;
+        this.methodName = "";
+        this.returnType = null;
+        this.parameterTypes = new Class<?>[0];
+        this.parameterTypesDesc = "";
+        this.nativeByteArrayNoArgs = false;
+        this.delegateSupplier = Objects.requireNonNull(delegateSupplier, "delegateSupplier");
+    }
+
+    static <R> NativeDubboMethodInvoker<R> lazy(Supplier<NativeDubboMethodInvoker<R>> delegateSupplier) {
+        return new NativeDubboMethodInvoker<>(delegateSupplier);
     }
 
     public R invoke() {
@@ -67,6 +89,9 @@ public final class NativeDubboMethodInvoker<R> {
     }
 
     private R invokeWithArgs(Object[] args) {
+        if (delegateSupplier != null) {
+            return delegate().invokeWithArgs(args);
+        }
         validateArgs(args);
         if (nativeByteArrayNoArgs) {
             return NativeDubboBridge.invokeByteArrayNoArgs(
@@ -77,13 +102,16 @@ public final class NativeDubboMethodInvoker<R> {
                     methodName,
                     timeoutMs);
         }
-        NativeDubboCodec.MethodPlan plan = legacyPlan();
+        Object plan = legacyPlan();
         byte[] requestBody = requestBody(plan, args);
         byte[] responseBody = NativeDubboBridge.invoke(clientId, requestBody, timeoutMs);
-        return NativeDubboCodec.decodeResponse(responseBody, plan);
+        return LegacyCodecSupport.decodeResponse(responseBody, plan);
     }
 
     private CompletableFuture<R> invokeAsyncWithArgs(Object[] args) {
+        if (delegateSupplier != null) {
+            return delegate().invokeAsyncWithArgs(args);
+        }
         validateArgs(args);
         if (nativeByteArrayNoArgs) {
             @SuppressWarnings("unchecked")
@@ -96,10 +124,24 @@ public final class NativeDubboMethodInvoker<R> {
                     timeoutMs);
             return future;
         }
-        NativeDubboCodec.MethodPlan plan = legacyPlan();
+        Object plan = legacyPlan();
         byte[] requestBody = requestBody(plan, args);
         return NativeDubboBridge.invokeAsync(clientId, requestBody, timeoutMs)
-                .thenApply(responseBody -> NativeDubboCodec.decodeResponse(responseBody, plan));
+                .thenApply(responseBody -> LegacyCodecSupport.decodeResponse(responseBody, plan));
+    }
+
+    private NativeDubboMethodInvoker<R> delegate() {
+        NativeDubboMethodInvoker<R> current = delegate;
+        if (current == null) {
+            synchronized (this) {
+                current = delegate;
+                if (current == null) {
+                    current = delegateSupplier.get();
+                    delegate = current;
+                }
+            }
+        }
+        return current;
     }
 
     private void validateArgs(Object[] args) {
@@ -109,22 +151,22 @@ public final class NativeDubboMethodInvoker<R> {
         }
     }
 
-    private byte[] requestBody(NativeDubboCodec.MethodPlan plan, Object[] args) {
+    private byte[] requestBody(Object plan, Object[] args) {
         if (args.length != 0) {
-            return NativeDubboCodec.encodeRequest(plan, args, timeoutMs);
+            return LegacyCodecSupport.encodeRequest(plan, args, timeoutMs);
         }
         byte[] current = precomputedNoArgRequestBody;
         if (current == null) {
-            current = NativeDubboCodec.encodeRequest(plan, EMPTY_ARGS, timeoutMs);
+            current = LegacyCodecSupport.encodeRequest(plan, EMPTY_ARGS, timeoutMs);
             precomputedNoArgRequestBody = current;
         }
         return current;
     }
 
-    private NativeDubboCodec.MethodPlan legacyPlan() {
-        NativeDubboCodec.MethodPlan current = legacyPlan;
+    private Object legacyPlan() {
+        Object current = legacyPlan;
         if (current == null) {
-            current = new NativeDubboCodec.MethodPlan(
+            current = LegacyCodecSupport.newPlan(
                     serviceName,
                     group,
                     version,

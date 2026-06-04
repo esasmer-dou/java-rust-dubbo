@@ -5,47 +5,38 @@ import com.reactor.rust.dubbo.DubboConsumerException;
 import com.reactor.rust.dubbo.DubboReferenceSpec;
 import com.reactor.rust.dubbo.NativeDubboBridge;
 import com.reactor.rust.dubbo.NativeDubboMethodInvoker;
-import com.reactor.rust.dubbo.internal.registry.ProviderWatcher;
-import com.reactor.rust.dubbo.internal.registry.ZookeeperRegistryClient;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executor;
 
-final class NativeDubboReference<T> implements NativeDubboReferenceHandle<T> {
+public final class StaticNativeDubboReference<T> implements NativeDubboReferenceHandle<T> {
+
+    private static final Object[] EMPTY_ARGS = new Object[0];
 
     private final DubboConsumerConfig config;
     private final DubboReferenceSpec<T> spec;
     private final Class<T> serviceInterface;
     private final int nativeClientId;
-    private final ProviderWatcher watcher;
+    private final String staticProviders;
     private volatile T proxy;
-    private static final Object[] EMPTY_ARGS = new Object[0];
 
-    NativeDubboReference(
-            DubboConsumerConfig config,
-            DubboReferenceSpec<T> spec,
-            ZookeeperRegistryClient zookeeper,
-            Executor refreshExecutor) {
+    public StaticNativeDubboReference(DubboConsumerConfig config, DubboReferenceSpec<T> spec) {
         this.config = Objects.requireNonNull(config, "config");
         this.spec = Objects.requireNonNull(spec, "spec");
         this.serviceInterface = spec.serviceInterface();
         this.nativeClientId = createNativeClient(config, spec);
-        this.watcher = new NativeDubboProviderWatcher<>(
-                config,
-                spec,
-                zookeeper,
-                refreshExecutor,
-                nativeClientId);
+        this.staticProviders = config.providers();
     }
 
+    @Override
     public void start() {
-        watcher.start();
+        NativeDubboBridge.updateProviders(nativeClientId, staticProviders);
     }
 
+    @Override
     public T proxy() {
         T current = proxy;
         if (current == null) {
@@ -60,6 +51,7 @@ final class NativeDubboReference<T> implements NativeDubboReferenceHandle<T> {
         return current;
     }
 
+    @Override
     public <R> NativeDubboMethodInvoker<R> methodInvoker(String methodName, Class<R> returnType, Class<?>... parameterTypes) {
         Class<?>[] types = parameterTypes == null ? new Class<?>[0] : parameterTypes;
         try {
@@ -77,7 +69,7 @@ final class NativeDubboReference<T> implements NativeDubboReferenceHandle<T> {
 
     @Override
     public void close() {
-        watcher.close();
+        NativeDubboBridge.updateProviders(nativeClientId, "");
         NativeDubboBridge.closeClient(nativeClientId);
     }
 
@@ -85,18 +77,18 @@ final class NativeDubboReference<T> implements NativeDubboReferenceHandle<T> {
         Object created = Proxy.newProxyInstance(
                 serviceInterface.getClassLoader(),
                 new Class<?>[] {serviceInterface},
-                new NativeInvocationHandler());
+                new StaticNativeInvocationHandler());
         return serviceInterface.cast(created);
     }
 
-    private final class NativeInvocationHandler implements InvocationHandler {
+    private final class StaticNativeInvocationHandler implements InvocationHandler {
         private final ConcurrentHashMap<Method, NativeDubboMethodInvoker<?>> methodCache = new ConcurrentHashMap<>();
 
         @Override
         public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
             if (method.getDeclaringClass() == Object.class) {
                 return switch (method.getName()) {
-                    case "toString" -> "NativeDubboProxy(" + serviceInterface.getName() + ")";
+                    case "toString" -> "StaticNativeDubboProxy(" + serviceInterface.getName() + ")";
                     case "hashCode" -> System.identityHashCode(proxy);
                     case "equals" -> proxy == args[0];
                     default -> method.invoke(this, args);

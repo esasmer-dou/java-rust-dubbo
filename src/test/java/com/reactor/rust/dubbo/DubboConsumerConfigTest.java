@@ -79,4 +79,16 @@ class DubboConsumerConfigTest {
         assertEquals("balanced-dubbo", config.runtimeProfile());
     }
 
+    @Test
+    void defaultsToMicroDubboNativeLowMemoryRuntime() {
+        DubboConsumerConfig config = DubboConsumerConfig.builder().build();
+
+        assertEquals("micro-dubbo", config.runtimeProfile());
+        assertEquals("native", config.transport());
+        assertEquals(32, config.maxInflight());
+        assertEquals(1, config.nativeConnectionsPerEndpoint());
+        assertEquals(1, config.nativeAsyncWorkers());
+        assertEquals(32, config.nativeAsyncQueueCapacity());
+    }
+
 }
