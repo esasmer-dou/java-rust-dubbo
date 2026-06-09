@@ -1,5 +1,7 @@
 # java-rust-dubbo
 
+English | [Turkish](README.tr.md)
+
 `java-rust-dubbo` is a small Dubbo consumer library for the Java/Rust REST framework.
 
 Use it when your REST application is written in Java, your HTTP server is handled by the Rust native layer, and you only need to call Dubbo providers from your Java services without bringing a full Spring Boot or full Apache Dubbo runtime into the REST process.
@@ -424,4 +426,4 @@ Release artifacts are produced under `target/`:
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
 - [Release Notes](docs/RELEASE_NOTES_v0.1.0-rc3.md)
-- [Turkish README](README_TR.md)
+- [Turkish README](README.tr.md)
