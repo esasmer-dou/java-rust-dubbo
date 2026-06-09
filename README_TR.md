@@ -1,32 +1,32 @@
 # java-rust-dubbo
 
-`java-rust-dubbo`, Java/Rust REST framework icinde Dubbo provider cagirmak icin hazirlanmis kucuk bir consumer kutuphanesidir.
+`java-rust-dubbo`, Java/Rust REST framework içinde Dubbo provider çağırmak için hazırlanmış küçük ve kontrollü bir consumer kütüphanesidir.
 
-Kullanim fikri basittir:
+Kullanım modeli basittir:
 
-- REST handler, service ve component kodunuz Java'da kalir.
-- HTTP server ve native I/O tarafi Rust Hyper ile devam eder.
-- Dubbo provider cagrisini Java servisinizden yaparsiniz.
-- Isterseniz Dubbo TCP data-plane Rust tarafinda calisir ve consumer JVM daha kucuk kalir.
-- ZooKeeper, Netty ve resmi Dubbo client stack'i varsayilan olarak zorunlu degildir.
+- REST handler, service ve component kodunuz Java'da kalır.
+- HTTP server ve native I/O tarafı Rust Hyper ile devam eder.
+- Java servisiniz Dubbo provider'a bu kütüphane üzerinden çağrı yapar.
+- İsterseniz Dubbo TCP data-plane Rust tarafında çalışır; böylece consumer JVM daha küçük kalır.
+- ZooKeeper, Netty ve resmi Dubbo client stack varsayılan olarak zorunlu değildir.
 
-Bu kutuphane, "dependency ekleyince her seyi otomatik yapsin" yaklasimindan ziyade acik ve kontrollu kurulum yapar. Bu da memory, thread ve latency davranisini daha kolay yonetmenizi saglar.
+Bu kütüphane, "dependency ekleyince her şeyi otomatik yapsın" yaklaşımından bilinçli olarak uzak durur. Kurulum açık ve kontrollüdür. Bunun nedeni memory, thread ve latency davranışını üretim ortamında daha öngörülebilir yönetmektir.
 
-## Ne Zaman Kullanilir?
+## Ne Zaman Kullanılır?
 
-Su durumlarda uygundur:
+Şu durumlarda uygundur:
 
-- Java/Rust REST uygulamanizin Dubbo provider cagirmasi gerekiyorsa.
-- Spring Boot starter veya full Dubbo client stack'i REST process'ine almak istemiyorsaniz.
-- Kubernetes icinde provider adreslerini Service DNS, config veya sidecar-generated provider list ile verebiliyorsaniz.
-- Provider JSON veya binary body'yi hazir `byte[]` olarak dondurebiliyorsa.
-- Dusuk RSS, dusuk allocation ve kontrollu backpressure onemliyse.
+- Java/Rust REST uygulamanızın Dubbo provider çağırması gerekiyorsa.
+- Spring Boot starter veya full Dubbo client stack'i REST process içine almak istemiyorsanız.
+- Kubernetes içinde provider adreslerini Service DNS, config veya sidecar-generated provider list ile verebiliyorsanız.
+- Provider JSON veya binary body'yi hazır `byte[]` olarak döndürebiliyorsa.
+- Düşük RSS, düşük allocation ve kontrollü backpressure önemliyse.
 
-Su durumlarda resmi Dubbo stack daha dogru olabilir:
+Şu durumlarda resmi Dubbo stack daha doğru olabilir:
 
-- Dubbo config-center, metadata-center veya router/governance kurallarina ihtiyaciniz varsa.
-- Callback, generic invocation, Triple, REST protocol veya full filter-chain davranisi gerekiyorsa.
-- Consumer registration ve tum resmi Dubbo uyumlulugu zorunluysa.
+- Dubbo config-center, metadata-center veya router/governance kurallarına ihtiyacınız varsa.
+- Callback, generic invocation, Triple, REST protocol veya full filter-chain davranışı gerekiyorsa.
+- Consumer registration ve tüm resmi Dubbo uyumluluğu zorunluysa.
 
 ## Maven
 
@@ -38,9 +38,9 @@ Su durumlarda resmi Dubbo stack daha dogru olabilir:
 </dependency>
 ```
 
-Bu artifact Maven Central'da degil, GitHub Packages uzerinde yayinlanir. Repo veya package private ise sadece dependency eklemek yetmez. Consumer projenin GitHub Packages Maven repository'sini tanimlamasi ve GitHub token ile authenticate olmasi gerekir.
+Bu artifact Maven Central'da değil, GitHub Packages üzerinde yayınlanır. Repo veya package private ise sadece dependency eklemek yeterli değildir. Consumer projenin GitHub Packages Maven repository'sini tanımlaması ve GitHub token ile kimlik doğrulaması yapması gerekir.
 
-Consumer projenin `pom.xml` dosyasina repository ekleyin:
+Consumer projenin `pom.xml` dosyasına repository ekleyin:
 
 ```xml
 <repositories>
@@ -52,7 +52,7 @@ Consumer projenin `pom.xml` dosyasina repository ekleyin:
 </repositories>
 ```
 
-Consumer makinede `~/.m2/settings.xml` icine credential ekleyin. Buradaki `<id>`, `pom.xml` icindeki repository id ile ayni olmalidir:
+Consumer makinede `~/.m2/settings.xml` içine Maven kimlik bilgisini ekleyin. Buradaki `<id>`, `pom.xml` içindeki repository id ile aynı olmalıdır:
 
 ```xml
 <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
@@ -68,13 +68,13 @@ Consumer makinede `~/.m2/settings.xml` icine credential ekleyin. Buradaki `<id>`
 </settings>
 ```
 
-Token classic GitHub PAT olmali ve `read:packages` scope'u tasimalidir. Private repo icin token'in private repo'ya da erisimi olmalidir; pratikte genelde `repo` scope'u da gerekir. Organization SSO kullaniyorsa token organization icin authorize edilmelidir. Token'i `pom.xml` icine yazmayin.
+Token classic GitHub PAT olmalı ve `read:packages` scope'u taşımalıdır. Package private ise token'ın ilgili private repo'ya erişimi de olmalıdır; pratikte çoğu kurulumda `repo` scope'u da gerekir. Organization SSO kullanıyorsa token organization için authorize edilmelidir. Token'ı `pom.xml` içine yazmayın.
 
-Arkadasiniz repo'yu okuyabildigi halde Maven `401` veya `404` aliyorsa GitHub package ayarlarini kontrol edin. Package ya `esasmer-dou/java-rust-dubbo` reposundan access inherit etmeli ya da arkadasiniza/takimina package uzerinde en az `Read` yetkisi verilmelidir.
+Arkadaşınız repo'yu okuyabildiği halde Maven `401` veya `404` alıyorsa GitHub package yetkilerini kontrol edin. Package ya `esasmer-dou/java-rust-dubbo` reposundaki erişim ayarlarını miras almalı ya da arkadaşınıza veya takımına package üzerinde en az `Read` yetkisi verilmelidir.
 
-Native modda bu dependency kucuk tutulur. Uygulamaniza ZooKeeper, Netty, Hessian Lite veya resmi Dubbo client stack otomatik olarak tasinmaz.
+Native modda bu dependency küçük tutulur. Uygulamanıza ZooKeeper, Netty, Hessian Lite veya resmi Dubbo client stack otomatik olarak taşınmaz.
 
-En kucuk static-provider native kurulum icin full JAR yerine `native-static` classifier kullanabilirsiniz:
+En küçük static-provider native kurulum için full JAR yerine `native-static` classifier kullanabilirsiniz:
 
 ```xml
 <dependency>
@@ -85,46 +85,46 @@ En kucuk static-provider native kurulum icin full JAR yerine `native-static` cla
 </dependency>
 ```
 
-Bu classifier'i sadece su kosullarda kullanin:
+Bu classifier'ı sadece şu koşullarda kullanın:
 
-- `reactor.dubbo.transport=native` kullaniyorsunuz.
+- `reactor.dubbo.transport=native` kullanıyorsunuz.
 - `reactor.dubbo.providers=host:port,...` dolu.
-- Hot Dubbo methodunuz no-arg `byte[]` donen low-overhead path.
-- Consumer tarafinda Java ZooKeeper discovery, official Dubbo mode veya Java Hessian argument encode/decode gerekmiyor.
+- Yoğun kullanılan Dubbo metodunuz no-arg `byte[]` dönen low-overhead path.
+- Consumer tarafında Java ZooKeeper discovery, official Dubbo mode veya Java Hessian argument encode/decode gerekmiyor.
 
-ZooKeeper discovery, argumanli Dubbo methodlari, DTO decode, official Dubbo uyumlulugu veya full governance gerekiyorsa classifier kullanmayin. Normal dependency bu compatibility path'leri korur.
+ZooKeeper discovery, argümanlı Dubbo metotları, DTO decode, official Dubbo uyumluluğu veya full governance gerekiyorsa classifier kullanmayın. Normal dependency bu compatibility path'leri korur.
 
-Native modun calismasi icin Java/Rust framework native library de yuklu olmalidir. `rust-java-rest` icinde bu native library framework tarafindan yuklenir. Standalone testlerde `rust_hyper` kutuphanesini `java.library.path` ile gorunur hale getirmek gerekir.
+Native modun çalışması için Java/Rust framework native library de yüklü olmalıdır. `rust-java-rest` içinde bu native library framework tarafından yüklenir. Standalone testlerde `rust_hyper` kütüphanesini `java.library.path` ile görünür hale getirmek gerekir.
 
-## Public API Siniri
+## Kullanılacak API Sınırı
 
-Uygulama kodunda sadece dogrudan `com.reactor.rust.dubbo` altindaki siniflari kullanin. Ornek: `DubboConsumerConfig`, `DubboReferenceSpec`, `NativeDubboConsumerClient`, `NativeDubboConsumers` ve `NativeDubboMethodInvoker`.
+Uygulama kodunda sadece doğrudan `com.reactor.rust.dubbo` altındaki sınıfları kullanın. Örnek: `DubboConsumerConfig`, `DubboReferenceSpec`, `NativeDubboConsumerClient`, `NativeDubboConsumers` ve `NativeDubboMethodInvoker`.
 
-`com.reactor.rust.dubbo.internal.*` altindaki siniflar kutuphanenin kendi ic uygulama detayidir. Bu paketler sorumluluklara gore ayrilmistir:
+`com.reactor.rust.dubbo.internal.*` altındaki sınıflar kütüphanenin iç uygulama detaylarıdır. Bu paketler sorumluluklarına göre ayrılmıştır:
 
 - `internal.nativeclient`: native Dubbo transport reference, codec, descriptor ve native provider watcher.
 - `internal.direct`: opsiyonel resmi Dubbo direct invoker yolu.
-- `internal.registry`: ZooKeeper provider discovery ve Dubbo URL yardimcilari.
-- `internal.runtime`: Dubbo runtime model ve low-RSS Netty tuning.
-- `internal.util`: kucuk runtime yardimcilari.
+- `internal.registry`: ZooKeeper provider discovery ve Dubbo URL yardımcıları.
+- `internal.runtime`: Dubbo runtime modeli ve low-RSS Netty tuning.
+- `internal.util`: küçük runtime yardımcıları.
 
-Servis kodunuzda `internal.*` import etmeyin. Bu paketler release candidate surumleri arasinda degisebilir; source compatibility garantisi public root API icindir.
+Servis kodunuzda `internal.*` import etmeyin. Bu paketler release candidate sürümleri arasında değişebilir. Source compatibility garantisi yalnızca public root API için verilir.
 
-## Quick Start
+## Hızlı Başlangıç
 
-Bu bolum, bir Java/Rust REST uygulamasini adim adim Dubbo consumer haline getirir.
+Bu bölüm, bir Java/Rust REST uygulamasını adım adım Dubbo consumer haline getirir.
 
-### 1. Dependency Ekleyin
+### 1. Bağımlılığı Ekleyin
 
-Yukaridaki Maven dependency'yi uygulama `pom.xml` dosyaniza ekleyin.
+Yukarıdaki Maven dependency'yi uygulamanızın `pom.xml` dosyasına ekleyin.
 
-Private GitHub package'tan cekiyorsaniz Maven bolumundeki GitHub Packages repository tanimini ve `~/.m2/settings.xml` credential ayarini da ekleyin. Sadece dependency eklemek yeterli degildir, cunku bu artifact Maven Central'da yoktur.
+Private GitHub package'tan çekiyorsanız Maven bölümündeki GitHub Packages repository tanımını ve `~/.m2/settings.xml` kimlik bilgisini de ekleyin. Sadece dependency eklemek yeterli değildir, çünkü bu artifact Maven Central'da yoktur.
 
-Dubbo Spring Boot starter eklemeniz gerekmez. Bu kutuphane framework icinde acik bean/config mantigiyla kullanilir.
+Dubbo Spring Boot starter eklemeniz gerekmez. Bu kütüphane framework içinde açık bean/config mantığıyla kullanılır.
 
 ### 2. Temel Property'leri Ekleyin
 
-En dusuk RSS icin native transport ve static provider listesi ile baslayin:
+En düşük RSS için native transport ve static provider listesi ile başlayın:
 
 ```properties
 reactor.dubbo.transport=native
@@ -138,19 +138,19 @@ reactor.dubbo.native-async-workers=8
 reactor.dubbo.native-async-queue-capacity=1024
 ```
 
-Bu ayarlarin anlami:
+Bu ayarların anlamı:
 
-- `transport=native`: Dubbo TCP cagrisini Rust native data-plane yapar.
-- `providers=host:port`: Consumer hangi provider'a gidecegini bilir. Bu alan doluysa Java ZooKeeper client baslamaz.
-- `retries=0`: Gizli retry yapmaz. Latency daha ongorulebilir olur.
-- `max-inflight`: Ayni anda kac Dubbo cagrisinin devam edebilecegini sinirlar.
-- `native-async-queue-capacity`: Queue buyumesini sinirlar. Queue dolarsa kontrollu hata donulur, memory sisirilmez.
+- `transport=native`: Dubbo TCP çağrısını Rust native data-plane yapar.
+- `providers=host:port`: Consumer hangi provider'a gideceğini bilir. Bu alan doluysa Java ZooKeeper client başlamaz.
+- `retries=0`: Gizli retry yapılmaz. Latency daha öngörülebilir olur.
+- `max-inflight`: Aynı anda kaç Dubbo çağrısının devam edebileceğini sınırlar.
+- `native-async-queue-capacity`: Queue büyümesini sınırlar. Queue dolarsa kontrollü hata dönülür; memory şişirilmez.
 
-### 3. Provider Interface'ini Tanimlayin
+### 3. Provider Interface'ini Tanımlayın
 
-Provider hangi Java interface'i export ediyorsa consumer tarafinda ayni interface adini ve method imzasini kullanin.
+Provider hangi Java interface'i export ediyorsa consumer tarafında aynı interface adını ve metot imzasını kullanın.
 
-Mevcut en hizli native path icin provider'in no-arg `byte[]` donmesi idealdir:
+Mevcut en hızlı native path için provider'ın no-arg `byte[]` dönmesi idealdir:
 
 ```java
 package com.example.catalog;
@@ -160,11 +160,11 @@ public interface CatalogProviderApi {
 }
 ```
 
-Bu `byte[]` JSON olabilir. REST handler tarafinda bunu direkt `RawResponse.json(...)` ile dondurebilirsiniz. Boylece buyuk Java DTO graph olusturmadan provider cevabini HTTP response'a tasirsiniz.
+Bu `byte[]` JSON olabilir. REST handler tarafında bunu doğrudan `RawResponse.json(...)` ile döndürebilirsiniz. Böylece büyük Java DTO graph oluşturmadan provider cevabını HTTP response'a taşırsınız.
 
-### 4. Consumer Client'i Uygulama Baslangicinda Bir Kez Olusturun
+### 4. Consumer Client'i Uygulama Başlangıcında Bir Kez Oluşturun
 
-Dubbo client request basina olusturulmaz. Uygulama baslangicinda bir kez olusturulur ve tum request'lerde tekrar kullanilir.
+Dubbo client request başına oluşturulmaz. Uygulama başlangıcında bir kez oluşturulur ve tüm request'lerde tekrar kullanılır.
 
 ```java
 import com.example.catalog.CatalogProviderApi;
@@ -203,15 +203,15 @@ public final class DubboClientConfiguration {
 }
 ```
 
-Burada dikkat edilmesi gerekenler:
+Dikkat edilmesi gerekenler:
 
-- `NativeDubboConsumerClient` tek instance olarak yasamalidir.
-- `NativeDubboMethodInvoker` startup'ta hazirlanir, request sirasinda tekrar hesaplanmaz.
-- `shutdown()` icinde `client.close()` cagrilmalidir. Bu native client ve connection kaynaklarini temizler.
+- `NativeDubboConsumerClient` tek instance olarak yaşamalıdır.
+- `NativeDubboMethodInvoker` startup'ta hazırlanır; request sırasında tekrar hesaplanmaz.
+- `shutdown()` içinde `client.close()` çağrılmalıdır. Bu native client ve connection kaynaklarını temizler.
 
-### 5. Java Client Wrapper Yaziniz
+### 5. Java Client Wrapper Yazın
 
-Handler veya business service icinde direkt Dubbo detaylariyla calismamak daha temizdir. Kucuk bir wrapper class yazin.
+Handler veya business service içinde doğrudan Dubbo detaylarıyla çalışmamak daha temizdir. Küçük bir wrapper class yazın.
 
 ```java
 import com.reactor.rust.dubbo.NativeDubboMethodInvoker;
@@ -235,13 +235,13 @@ public final class CatalogClient {
 }
 ```
 
-`invoke()` senkron cagridir.
+`invoke()` senkron çağrıdır.
 
-`invokeAsync()` async cagridir. Handler `CompletionStage` donebiliyorsa bu yol daha dogrudur; request worker thread'i Dubbo cevabini bloklayarak beklemez.
+`invokeAsync()` async çağrıdır. Handler `CompletionStage` dönebiliyorsa bu yol daha doğrudur; request worker thread'i Dubbo cevabını bloklayarak beklemez.
 
-### 6. Handler Icinden Kullanin
+### 6. Handler İçinden Kullanın
 
-Provider JSON donduruyorsa bunu raw JSON response olarak sunabilirsiniz:
+Provider JSON döndürüyorsa bunu raw JSON response olarak sunabilirsiniz:
 
 ```java
 import com.reactor.rust.annotations.RustRoute;
@@ -267,40 +267,40 @@ public final class CatalogHandler {
 }
 ```
 
-Provider hata verirse veya timeout olursa uygulama katmaninda kontrollu HTTP response donun. Ornegin 503 ve kisa bir JSON hata body yeterlidir.
+Provider hata verirse veya timeout olursa uygulama katmanında kontrollü HTTP response dönün. Örneğin 503 ve kısa bir JSON hata body çoğu senaryo için yeterlidir.
 
 ### 7. Route Seviyesinde Limit Ekleyin
 
-Native client kendi icinde `max-inflight` ve queue limitleriyle korunur. Fakat HTTP endpoint seviyesinde de limit olmasi daha dogrudur.
+Native client kendi içinde `max-inflight` ve queue limitleriyle korunur. Fakat HTTP endpoint seviyesinde de limit olması daha doğrudur.
 
-Dusuk RSS servislerde route bulkhead kucuk tutulur. Overload durumunda kontrollu 503 donmek, binlerce request'i queue'da bekletmekten daha sagliklidir.
+Düşük RSS servislerde route bulkhead küçük tutulur. Overload durumunda kontrollü 503 dönmek, binlerce request'i queue'da bekletmekten daha sağlıklıdır.
 
-### 8. Production Oncesi Test Edin
+### 8. Production Öncesi Test Edin
 
-Canliya cikmadan once su senaryolari test edin:
+Canlıya çıkmadan önce şu senaryoları test edin:
 
-- Dubbo kapali idle RSS.
-- Dubbo acik idle RSS.
-- Load sonrasi RSS ve 30 saniye idle sonrasi RSS.
+- Dubbo kapalı idle RSS.
+- Dubbo açık idle RSS.
+- Load sonrası RSS ve 30 saniye idle sonrası RSS.
 - c64, c256, c512, c1000 concurrency.
-- Provider restart oldugunda consumer tekrar cagri yapabiliyor mu?
-- Provider yavasladiginda timeout calisiyor mu?
-- Queue doldugunda sistem memory sisirmeden kontrollu hata donuyor mu?
-- Uygulama kapanirken native client release ediliyor mu?
+- Provider restart olduğunda consumer tekrar çağrı yapabiliyor mu?
+- Provider yavaşladığında timeout çalışıyor mu?
+- Queue dolduğunda sistem memory şişirmeden kontrollü hata dönüyor mu?
+- Uygulama kapanırken native client release ediliyor mu?
 
-## Property Referansi
+## Property Referansı
 
-Tum ayarlar `reactor.dubbo.` prefix'i ile baslar.
+Tüm ayarlar `reactor.dubbo.` prefix'i ile başlar.
 
-Degerler uc yerden gelebilir:
+Değerler üç yerden gelebilir:
 
 - Java `Properties` objesi.
 - Java system property.
 - Environment variable.
 
-System property ve environment variable, `Properties` objesindeki degerin ustune yazar.
+System property ve environment variable, `Properties` objesindeki değerin üstüne yazar.
 
-Environment variable yazarken buyuk harf kullanin, `.` ve `-` karakterlerini `_` yapin:
+Environment variable yazarken büyük harf kullanın, `.` ve `-` karakterlerini `_` yapın:
 
 ```text
 REACTOR_DUBBO_TIMEOUT_MS=1000
@@ -309,50 +309,50 @@ REACTOR_DUBBO_NATIVE_ASYNC_WORKERS=8
 
 ### Temel Ayarlar
 
-| Property | Varsayilan | Ne Ise Yarar? | Ne Zaman Degistirilir? |
+| Property | Varsayılan | Ne İşe Yarar? | Ne Zaman Değiştirilir? |
 | --- | ---: | --- | --- |
-| `reactor.dubbo.application-name` | `rust-java-rest-dubbo-consumer` | Consumer adidir. Log, diagnostic ve official mode metadata icin anlamlidir. | Servis adinizla degistirin. Ornek: `orders-api`. |
-| `reactor.dubbo.transport` | `native` | Dubbo cagrisini kimin yapacagini belirler. `native` Rust data-plane kullanir, `official` resmi Dubbo stack'i kullanir. | Dusuk RSS icin `native` kalsin. Full Dubbo ozellikleri gerekiyorsa `official` kullanin. |
-| `reactor.dubbo.providers` | bos | Static provider listesidir. Format: `host:port,host2:port`. Doluysa Java ZooKeeper baslamaz. | Kubernetes Service DNS, config veya sidecar provider list kullaniyorsaniz doldurun. |
-| `reactor.dubbo.registry-address` | `zookeeper://127.0.0.1:2181` | `providers` bos ise ZooKeeper adresidir. | Dynamic provider discovery gerekiyorsa ayarlayin. |
-| `reactor.dubbo.registry-root` | `dubbo` | ZooKeeper icinde provider node'larinin root path'idir. | Provider'lar farkli root altinda register oluyorsa degistirin. |
-| `reactor.dubbo.registry-check` | `false` | Registry yoksa startup davranisini etkiler. | Rolling deploy icin genelde `false` kalir. Kritik dependency ise readiness check ekleyin. |
+| `reactor.dubbo.application-name` | `rust-java-rest-dubbo-consumer` | Consumer adıdır. Log, diagnostic ve official mode metadata için anlamlıdır. | Servis adınızla değiştirin. Örnek: `orders-api`. |
+| `reactor.dubbo.transport` | `native` | Dubbo çağrısını hangi transport'un yapacağını belirler. `native` Rust data-plane kullanır, `official` resmi Dubbo stack'i kullanır. | Düşük RSS için `native` kalsın. Full Dubbo özellikleri gerekiyorsa `official` kullanın. |
+| `reactor.dubbo.providers` | boş | Static provider listesidir. Format: `host:port,host2:port`. Doluysa Java ZooKeeper başlamaz. | Kubernetes Service DNS, config veya sidecar provider list kullanıyorsanız doldurun. |
+| `reactor.dubbo.registry-address` | `zookeeper://127.0.0.1:2181` | `providers` boş ise ZooKeeper adresidir. | Dynamic provider discovery gerekiyorsa ayarlayın. |
+| `reactor.dubbo.registry-root` | `dubbo` | ZooKeeper içinde provider node'larının root path'idir. | Provider'lar farklı root altında register oluyorsa değiştirin. |
+| `reactor.dubbo.registry-check` | `false` | Registry yoksa startup davranışını etkiler. | Rolling deploy için genelde `false` kalır. Dependency kritikse readiness check ekleyin. |
 
-### Cagri Davranisi
+### Çağrı Davranışı
 
-| Property | Varsayilan | Ne Ise Yarar? | Ne Zaman Degistirilir? |
+| Property | Varsayılan | Ne İşe Yarar? | Ne Zaman Değiştirilir? |
 | --- | ---: | --- | --- |
-| `reactor.dubbo.timeout-ms` | `1000` | Tek bir Dubbo cagrisinin ne kadar bekleyecegini belirler. | Provider normalde daha yavas ise artirin. p99 onemliyse dusuk tutun. |
-| `reactor.dubbo.retries` | `0` | Basarisiz cagri sonrasi kac ek deneme yapilacagini belirler. | Sadece idempotent methodlarda artirin. Aksi halde duplicate is ve p99 artisi yaratabilir. |
-| `reactor.dubbo.check` | `false` | Reference startup'ta provider varligini zorunlu gorsun mu? | Rolling restartlarda `false` daha yumusaktir. Dependency zorunluysa readiness ile kontrol edin. |
-| `reactor.dubbo.lazy` | `false` | Reference'in gec olusturulmasi davranisidir. | Startup'ta Dubbo hazirligi istemiyorsaniz kullanilabilir. |
-| `reactor.dubbo.protocol` | `dubbo` | Classic Dubbo protocol adidir. | Genelde degistirilmez. |
-| `reactor.dubbo.serialization` | `hessian2` | Dubbo serialization adidir. | Native mode icin `hessian2` kalsin. |
-| `reactor.dubbo.cluster` | `failfast` | Desteklenen degerler: `failfast`, `failover`. | Latency icin `failfast`. Idempotent cagri ve provider alternatifi varsa `failover`. |
-| `reactor.dubbo.loadbalance` | `random` | Desteklenen degerler: `random`, `roundrobin`. | Varsayilan `random` yeterlidir. Basit esit dagilim icin `roundrobin`. |
+| `reactor.dubbo.timeout-ms` | `1000` | Tek bir Dubbo çağrısının ne kadar bekleyeceğini belirler. | Provider normalde daha yavaşsa artırın. p99 önemliyse düşük tutun. |
+| `reactor.dubbo.retries` | `0` | Başarısız çağrı sonrası kaç ek deneme yapılacağını belirler. | Sadece idempotent metotlarda artırın. Aksi halde duplicate iş ve p99 artışı yaratabilir. |
+| `reactor.dubbo.check` | `false` | Reference startup'ta provider varlığını zorunlu görsün mü? | Rolling restartlarda `false` daha yumuşaktır. Dependency zorunluysa readiness ile kontrol edin. |
+| `reactor.dubbo.lazy` | `false` | Reference'ın geç oluşturulması davranışıdır. | Startup'ta Dubbo hazırlığı istemiyorsanız kullanılabilir. |
+| `reactor.dubbo.protocol` | `dubbo` | Classic Dubbo protocol adıdır. | Genelde değiştirilmez. |
+| `reactor.dubbo.serialization` | `hessian2` | Dubbo serialization adıdır. | Native mode için `hessian2` kalsın. |
+| `reactor.dubbo.cluster` | `failfast` | Desteklenen değerler: `failfast`, `failover`. | Latency için `failfast`. İdempotent çağrı ve provider alternatifi varsa `failover`. |
+| `reactor.dubbo.loadbalance` | `random` | Desteklenen değerler: `random`, `roundrobin`. | Varsayılan `random` yeterlidir. Basit eşit dağılım için `roundrobin`. |
 
 ### Native Kaynak Limitleri
 
-| Property | Varsayilan | Ne Ise Yarar? | Ne Zaman Degistirilir? |
+| Property | Varsayılan | Ne İşe Yarar? | Ne Zaman Değiştirilir? |
 | --- | ---: | --- | --- |
-| `reactor.dubbo.max-inflight` | `256` | Ayni anda devam eden native Dubbo cagri limitidir. | Dusuk RSS icin azaltin. Provider kapasitesi yuksekse ve testlerle dogrulandiysa artirin. |
-| `reactor.dubbo.max-response-bytes` | `8388608` | Native Dubbo response frame icin maksimum boyuttur. | Provider daha buyuk response donduruyorsa artirin. Gereksiz buyutmek RSS riskidir. |
-| `reactor.dubbo.native-connections-per-endpoint` | `16` | Her provider endpoint icin Rust keepalive TCP connection limitidir. | Low-RSS icin `2`. Balanced kullanim icin `16` iyi baslangictir. |
-| `reactor.dubbo.native-async-workers` | `2` | Async Dubbo cagri isleyici worker sayisidir. | Low-RSS icin kucuk tutun. Throughput icin benchmark ile artirin. |
-| `reactor.dubbo.native-async-queue-capacity` | `128` | Async cagri queue limitidir. Doluysa cagri fail-fast olur. | Her zaman bounded kalsin. Worker ve route bulkhead ile birlikte ayarlayin. |
+| `reactor.dubbo.max-inflight` | `256` | Aynı anda devam eden native Dubbo çağrı limitidir. | Düşük RSS için azaltın. Provider kapasitesi yüksekse ve testlerle doğrulandıysa artırın. |
+| `reactor.dubbo.max-response-bytes` | `8388608` | Native Dubbo response frame için maksimum boyuttur. | Provider daha büyük response döndürüyorsa artırın. Gereksiz büyütmek RSS riskidir. |
+| `reactor.dubbo.native-connections-per-endpoint` | `16` | Her provider endpoint için Rust keepalive TCP connection limitidir. | Low-RSS için `2`. Balanced kullanım için `16` iyi başlangıçtır. |
+| `reactor.dubbo.native-async-workers` | `2` | Async Dubbo çağrı işleyici worker sayısıdır. | Low-RSS için küçük tutun. Throughput için benchmark ile artırın. |
+| `reactor.dubbo.native-async-queue-capacity` | `128` | Async çağrı queue limitidir. Doluysa çağrı fail-fast olur. | Her zaman bounded kalsın. Worker ve route bulkhead ile birlikte ayarlayın. |
 
-### ZooKeeper Ve Official Mode Ayarlari
+### ZooKeeper ve Official Mode Ayarları
 
-| Property | Varsayilan | Ne Ise Yarar? | Ne Zaman Degistirilir? |
+| Property | Varsayılan | Ne İşe Yarar? | Ne Zaman Değiştirilir? |
 | --- | ---: | --- | --- |
-| `reactor.dubbo.registry-timeout-ms` | `3000` | ZooKeeper connect/operation timeout. | Sadece ZooKeeper discovery modunda anlamlidir. |
-| `reactor.dubbo.registry-session-timeout-ms` | `30000` | ZooKeeper session timeout. | Registry ortaminiz daha farkli deger istiyorsa degistirin. |
-| `reactor.dubbo.connections` | `1` | Official mode connection ayaridir. Native modda `native-connections-per-endpoint` kullanilir. | Official mode kullaniyorsaniz ayarlayin. |
-| `reactor.dubbo.share-connections` | `1` | Official mode shared connection ayaridir. | Official mode icin anlamlidir. |
-| `reactor.dubbo.refer-thread-num` | `1` | ZooKeeper provider refresh worker sayisidir. Request worker degildir. | Cok sayida reference ayni anda refresh oluyorsa artirilabilir. |
-| `reactor.dubbo.runtime-profile` | `low-rss` | Host uygulamanin okuyabilecegi profil bilgisidir. | `low-rss`, `balanced-dubbo`, `throughput`, `default` degerlerinden birini kullanin. |
+| `reactor.dubbo.registry-timeout-ms` | `3000` | ZooKeeper connect/operation timeout. | Sadece ZooKeeper discovery modunda anlamlıdır. |
+| `reactor.dubbo.registry-session-timeout-ms` | `30000` | ZooKeeper session timeout. | Registry ortamınız farklı değer istiyorsa değiştirin. |
+| `reactor.dubbo.connections` | `1` | Official mode connection ayarıdır. Native modda `native-connections-per-endpoint` kullanılır. | Official mode kullanıyorsanız ayarlayın. |
+| `reactor.dubbo.share-connections` | `1` | Official mode shared connection ayarıdır. | Official mode için anlamlıdır. |
+| `reactor.dubbo.refer-thread-num` | `1` | ZooKeeper provider refresh worker sayısıdır. Request worker değildir. | Çok sayıda reference aynı anda refresh oluyorsa artırılabilir. |
+| `reactor.dubbo.runtime-profile` | `low-rss` | Host uygulamanın okuyabileceği profil bilgisidir. | `low-rss`, `balanced-dubbo`, `throughput`, `default` değerlerinden birini kullanın. |
 
-## Baslangic Profilleri
+## Başlangıç Profilleri
 
 Low-RSS:
 
@@ -380,36 +380,36 @@ reactor.dubbo.native-async-workers=8
 reactor.dubbo.native-async-queue-capacity=1024
 ```
 
-Low-RSS profilde memory daha kontrolludur, overload durumunda 503 kabul edilir.
+Low-RSS profilde memory daha kontrollüdür; overload durumunda 503 kabul edilir.
 
-Balanced profilde Dubbo throughput daha iyi olur, fakat provider kapasitesi ve route bulkhead de buna gore ayarlanmalidir.
+Balanced profilde Dubbo throughput daha iyi olur. Fakat provider kapasitesi ve route bulkhead de buna göre ayarlanmalıdır.
 
-## Native Mode Ve Official Mode Farki
+## Native Mode ve Official Mode Farkı
 
-Native mode varsayilandir. Amaci consumer JVM icinde gereksiz class, thread ve native buffer maliyetini azaltmaktir. Bu modda resmi Dubbo `ReferenceConfig`, registry directory, official remoting, Netty, Java ZooKeeper client ve Hessian Lite hot no-arg `byte[]` path icin zorunlu degildir.
+Native mode varsayılandır. Amacı consumer JVM içinde gereksiz class, thread ve native buffer maliyetini azaltmaktır. Bu modda resmi Dubbo `ReferenceConfig`, registry directory, official remoting, Netty, Java ZooKeeper client ve Hessian Lite hot no-arg `byte[]` path için zorunlu değildir.
 
-Official mode, tam Dubbo davranisi gereken yerlerde kullanilir. Daha fazla ozellik verir, fakat RSS ve classpath maliyeti daha yuksektir.
+Official mode, tam Dubbo davranışı gereken yerlerde kullanılır. Daha fazla özellik sağlar, fakat RSS ve classpath maliyeti daha yüksektir.
 
-## Su An Bilerek Kapsam Disi Birakilanlar
+## Şu An Bilerek Kapsam Dışı Bırakılanlar
 
-Native mode su ozellikleri hedeflemez:
+Native mode şu özellikleri hedeflemez:
 
 - Dubbo config-center ve metadata-center.
-- `/consumers` altina consumer registration.
-- Resmi Dubbo router/governance kurallari.
+- `/consumers` altında consumer registration.
+- Resmi Dubbo router/governance kuralları.
 - Triple, REST protocol, HTTP/2, callback, generic invocation.
-- Full official filter-chain uyumlulugu.
-- Tek connection uzerinde multiplexed request demux.
+- Full official filter-chain uyumluluğu.
+- Tek connection üzerinde multiplexed request demux.
 
-Bu ozellikler gerekiyorsa official mode veya ayri bir Dubbo integration service daha dogru olur.
+Bu özellikler gerekiyorsa official mode veya ayrı bir Dubbo integration service daha doğru olur.
 
-## Build
+## Derleme
 
 ```powershell
 mvn clean verify
 ```
 
-Uretilen paketler:
+Üretilen paketler:
 
 - `target/java-rust-dubbo-0.1.0-rc3.jar`
 - `target/java-rust-dubbo-0.1.0-rc3-native-static.jar`
