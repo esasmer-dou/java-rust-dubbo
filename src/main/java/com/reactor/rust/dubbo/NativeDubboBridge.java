@@ -96,14 +96,35 @@ public final class NativeDubboBridge {
     }
 
     private static void loadNativeLibrary() {
-        try {
-            Class.forName("com.reactor.rust.bridge.NativeBridge", true,
-                    Thread.currentThread().getContextClassLoader());
+        ClassLoader ownLoader = NativeDubboBridge.class.getClassLoader();
+        if (loadFrameworkNativeBridge(ownLoader)) {
             return;
-        } catch (ClassNotFoundException ignored) {
-            // Standalone adapter smoke tests may load by java.library.path.
+        }
+
+        ClassLoader systemLoader = ClassLoader.getSystemClassLoader();
+        if (systemLoader != ownLoader && loadFrameworkNativeBridge(systemLoader)) {
+            return;
+        }
+
+        ClassLoader contextLoader = Thread.currentThread().getContextClassLoader();
+        if (contextLoader != ownLoader
+                && contextLoader != systemLoader
+                && loadFrameworkNativeBridge(contextLoader)) {
+            return;
         }
         System.loadLibrary("rust_hyper");
+    }
+
+    private static boolean loadFrameworkNativeBridge(ClassLoader loader) {
+        if (loader == null) {
+            return false;
+        }
+        try {
+            Class.forName("com.reactor.rust.bridge.NativeBridge", true, loader);
+            return true;
+        } catch (ClassNotFoundException ignored) {
+            return false;
+        }
     }
 
     private static void completeInvoke(long callbackId, byte[] responseBody, String errorMessage) {

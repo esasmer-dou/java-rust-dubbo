@@ -36,7 +36,7 @@ Bu kütüphane, "dependency ekleyince her şeyi otomatik yapsın" yaklaşımınd
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.1.0-rc3</version>
+  <version>0.1.0-rc4</version>
 </dependency>
 ```
 
@@ -82,7 +82,7 @@ En küçük static-provider native kurulum için full JAR yerine `native-static`
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.1.0-rc3</version>
+  <version>0.1.0-rc4</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -413,6 +413,6 @@ mvn clean verify
 
 Üretilen paketler:
 
-- `target/java-rust-dubbo-0.1.0-rc3.jar`
-- `target/java-rust-dubbo-0.1.0-rc3-native-static.jar`
-- `target/java-rust-dubbo-0.1.0-rc3-sources.jar`
+- `target/java-rust-dubbo-0.1.0-rc4.jar`
+- `target/java-rust-dubbo-0.1.0-rc4-native-static.jar`
+- `target/java-rust-dubbo-0.1.0-rc4-sources.jar`

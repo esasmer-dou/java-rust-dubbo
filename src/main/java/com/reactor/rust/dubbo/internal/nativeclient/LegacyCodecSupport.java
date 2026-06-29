@@ -24,7 +24,8 @@ public final class LegacyCodecSupport {
             String methodName,
             Class<?> returnType,
             Class<?>[] parameterTypes,
-            String parameterTypesDesc
+            String parameterTypesDesc,
+            ClassLoader codecClassLoader
     ) {
         CodecMethods methods = methods();
         try {
@@ -36,7 +37,8 @@ public final class LegacyCodecSupport {
                     methodName,
                     returnType,
                     parameterTypes,
-                    parameterTypesDesc);
+                    parameterTypesDesc,
+                    codecClassLoader);
         } catch (IllegalAccessException e) {
             throw new DubboConsumerException("Invalid native Dubbo legacy codec access", e);
         } catch (InvocationTargetException e) {
@@ -87,7 +89,8 @@ public final class LegacyCodecSupport {
                             String.class,
                             Class.class,
                             Class[].class,
-                            String.class),
+                            String.class,
+                            ClassLoader.class),
                     codec.getMethod(ENCODE_REQUEST, Object.class, Object[].class, int.class),
                     codec.getMethod(DECODE_RESPONSE, byte[].class, Object.class));
         } catch (ClassNotFoundException e) {

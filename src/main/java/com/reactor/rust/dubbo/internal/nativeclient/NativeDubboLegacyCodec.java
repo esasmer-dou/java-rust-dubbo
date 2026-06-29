@@ -18,7 +18,8 @@ public final class NativeDubboLegacyCodec {
             String methodName,
             Class<?> returnType,
             Class<?>[] parameterTypes,
-            String parameterTypesDesc
+            String parameterTypesDesc,
+            ClassLoader codecClassLoader
     ) {
         return new NativeDubboCodec.MethodPlan(
                 serviceName,
@@ -27,7 +28,8 @@ public final class NativeDubboLegacyCodec {
                 methodName,
                 returnType,
                 parameterTypes,
-                parameterTypesDesc
+                parameterTypesDesc,
+                codecClassLoader
         );
     }
 

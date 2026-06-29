@@ -31,7 +31,7 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.1.0-rc3</version>
+  <version>0.1.0-rc4</version>
 </dependency>
 ```
 
@@ -77,7 +77,7 @@ For the smallest static-provider native setup, use the `native-static` classifie
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.1.0-rc3</version>
+  <version>0.1.0-rc4</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -418,12 +418,12 @@ mvn clean verify
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-0.1.0-rc3.jar`
-- `java-rust-dubbo-0.1.0-rc3-native-static.jar`
-- `java-rust-dubbo-0.1.0-rc3-sources.jar`
+- `java-rust-dubbo-0.1.0-rc4.jar`
+- `java-rust-dubbo-0.1.0-rc4-native-static.jar`
+- `java-rust-dubbo-0.1.0-rc4-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v0.1.0-rc3.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.1.0-rc4.md)
 - [Turkish README](README.tr.md)

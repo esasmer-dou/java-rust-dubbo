@@ -21,6 +21,7 @@ public final class NativeDubboMethodInvoker<R> {
     private final Class<R> returnType;
     private final Class<?>[] parameterTypes;
     private final String parameterTypesDesc;
+    private final ClassLoader codecClassLoader;
     private final boolean nativeByteArrayNoArgs;
     private final Supplier<NativeDubboMethodInvoker<R>> delegateSupplier;
     private volatile NativeDubboMethodInvoker<R> delegate;
@@ -42,6 +43,7 @@ public final class NativeDubboMethodInvoker<R> {
         this.returnType = Objects.requireNonNull(returnType, "returnType");
         this.parameterTypes = method.getParameterTypes();
         this.parameterTypesDesc = NativeDubboDescriptor.parameterTypesDesc(parameterTypes);
+        this.codecClassLoader = codecClassLoader(spec, method, returnType);
         this.nativeByteArrayNoArgs = this.returnType == byte[].class && this.parameterTypes.length == 0;
         this.delegateSupplier = null;
     }
@@ -56,6 +58,7 @@ public final class NativeDubboMethodInvoker<R> {
         this.returnType = null;
         this.parameterTypes = new Class<?>[0];
         this.parameterTypesDesc = "";
+        this.codecClassLoader = null;
         this.nativeByteArrayNoArgs = false;
         this.delegateSupplier = Objects.requireNonNull(delegateSupplier, "delegateSupplier");
     }
@@ -173,10 +176,32 @@ public final class NativeDubboMethodInvoker<R> {
                     methodName,
                     returnType,
                     parameterTypes,
-                    parameterTypesDesc);
+                    parameterTypesDesc,
+                    codecClassLoader);
             legacyPlan = current;
         }
         return current;
+    }
+
+    private static ClassLoader codecClassLoader(
+            DubboReferenceSpec<?> spec,
+            Method method,
+            Class<?> returnType
+    ) {
+        ClassLoader loader = method.getDeclaringClass().getClassLoader();
+        if (loader == null) {
+            loader = spec.serviceInterface().getClassLoader();
+        }
+        if (loader == null) {
+            loader = returnType.getClassLoader();
+        }
+        if (loader == null) {
+            loader = NativeDubboMethodInvoker.class.getClassLoader();
+        }
+        if (loader == null) {
+            loader = ClassLoader.getSystemClassLoader();
+        }
+        return loader;
     }
 
     private static int valueOrDefault(Integer value, int defaultValue) {

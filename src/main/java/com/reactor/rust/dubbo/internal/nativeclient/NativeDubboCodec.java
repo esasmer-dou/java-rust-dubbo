@@ -4,6 +4,7 @@ import com.reactor.rust.dubbo.DubboConsumerException;
 
 import com.alibaba.com.caucho.hessian.io.Hessian2Input;
 import com.alibaba.com.caucho.hessian.io.Hessian2Output;
+import com.alibaba.com.caucho.hessian.io.SerializerFactory;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -33,6 +34,8 @@ public final class NativeDubboCodec {
             ThreadLocal.withInitial(() -> new ReusableByteArrayOutputStream(REQUEST_BUFFER_INITIAL_BYTES));
     private static final ConcurrentHashMap<String, Map<String, Object>> ATTACHMENTS_CACHE =
             new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<ClassLoader, SerializerFactory> SERIALIZER_FACTORIES =
+            new ConcurrentHashMap<>();
 
     private NativeDubboCodec() {}
 
@@ -41,6 +44,7 @@ public final class NativeDubboCodec {
             ReusableByteArrayOutputStream bytes = REQUEST_BUFFER.get();
             bytes.reset();
             Hessian2Output out = new Hessian2Output(bytes);
+            out.setSerializerFactory(serializerFactory(plan));
             out.writeString(DUBBO_PROTOCOL_VERSION);
             out.writeString(plan.serviceName);
             out.writeString(plan.version);
@@ -66,6 +70,7 @@ public final class NativeDubboCodec {
     public static <R> R decodeResponse(byte[] body, MethodPlan plan) {
         try {
             Hessian2Input in = new Hessian2Input(new ByteArrayInputStream(body));
+            in.setSerializerFactory(serializerFactory(plan));
             int flag = in.readInt();
             Object value = null;
             switch (flag) {
@@ -128,6 +133,17 @@ public final class NativeDubboCodec {
         return Map.copyOf(map);
     }
 
+    private static SerializerFactory serializerFactory(MethodPlan plan) {
+        ClassLoader loader = plan.codecClassLoader;
+        if (loader == null) {
+            loader = NativeDubboCodec.class.getClassLoader();
+        }
+        if (loader == null) {
+            loader = ClassLoader.getSystemClassLoader();
+        }
+        return SERIALIZER_FACTORIES.computeIfAbsent(loader, SerializerFactory::new);
+    }
+
     public record MethodPlan(
             String serviceName,
             String group,
@@ -135,7 +151,8 @@ public final class NativeDubboCodec {
             String methodName,
             Class<?> returnType,
             Class<?>[] parameterTypes,
-            String parameterTypesDesc) {}
+            String parameterTypesDesc,
+            ClassLoader codecClassLoader) {}
 
     private static final class ReusableByteArrayOutputStream extends ByteArrayOutputStream {
         private ReusableByteArrayOutputStream(int size) {
