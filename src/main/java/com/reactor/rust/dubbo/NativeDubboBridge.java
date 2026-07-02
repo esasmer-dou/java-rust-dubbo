@@ -1,13 +1,10 @@
 package com.reactor.rust.dubbo;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 public final class NativeDubboBridge {
 
-    private static final AtomicLong CALLBACK_IDS = new AtomicLong(1);
-    private static final ConcurrentHashMap<Long, CompletableFuture<byte[]>> PENDING = new ConcurrentHashMap<>();
+    private static final PendingNativeDubboInvocations PENDING = new PendingNativeDubboInvocations();
 
     private NativeDubboBridge() {}
 
@@ -36,15 +33,14 @@ public final class NativeDubboBridge {
     }
 
     public static CompletableFuture<byte[]> invokeAsync(int clientId, byte[] requestBody, int timeoutMs) {
-        long callbackId = CALLBACK_IDS.getAndIncrement();
-        CompletableFuture<byte[]> future = new CompletableFuture<>();
-        PENDING.put(callbackId, future);
-        boolean accepted = nativeInvokeAsync(clientId, requestBody, timeoutMs, callbackId);
+        PendingNativeDubboInvocations.PendingCall pending = PENDING.begin(clientId);
+        boolean accepted = nativeInvokeAsync(clientId, requestBody, timeoutMs, pending.callbackId());
         if (!accepted) {
-            PENDING.remove(callbackId);
-            future.completeExceptionally(new DubboConsumerException("Native Dubbo async queue rejected the call"));
+            PENDING.rejected(pending, "Native Dubbo async queue rejected the call");
+        } else {
+            PENDING.accepted(pending, timeoutMs);
         }
-        return future;
+        return pending.future();
     }
 
     @SuppressWarnings("unchecked")
@@ -65,9 +61,7 @@ public final class NativeDubboBridge {
             String version,
             String methodName,
             int timeoutMs) {
-        long callbackId = CALLBACK_IDS.getAndIncrement();
-        CompletableFuture<byte[]> future = new CompletableFuture<>();
-        PENDING.put(callbackId, future);
+        PendingNativeDubboInvocations.PendingCall pending = PENDING.begin(clientId);
         boolean accepted = nativeInvokeByteArrayNoArgsAsync(
                 clientId,
                 serviceName,
@@ -75,16 +69,21 @@ public final class NativeDubboBridge {
                 version,
                 methodName,
                 timeoutMs,
-                callbackId);
+                pending.callbackId());
         if (!accepted) {
-            PENDING.remove(callbackId);
-            future.completeExceptionally(new DubboConsumerException("Native Dubbo async queue rejected the call"));
+            PENDING.rejected(pending, "Native Dubbo async queue rejected the call");
+        } else {
+            PENDING.accepted(pending, timeoutMs);
         }
-        return future;
+        return pending.future();
     }
 
     public static void closeClient(int clientId) {
-        nativeCloseClient(clientId);
+        try {
+            nativeCloseClient(clientId);
+        } finally {
+            PENDING.closeClient(clientId, new DubboConsumerException("Native Dubbo client was closed"));
+        }
     }
 
     public static String metricsJson() {
@@ -128,15 +127,11 @@ public final class NativeDubboBridge {
     }
 
     private static void completeInvoke(long callbackId, byte[] responseBody, String errorMessage) {
-        CompletableFuture<byte[]> future = PENDING.remove(callbackId);
-        if (future == null) {
-            return;
-        }
-        if (errorMessage == null) {
-            future.complete(responseBody);
-        } else {
-            future.completeExceptionally(new DubboConsumerException(errorMessage));
-        }
+        PENDING.complete(callbackId, responseBody, errorMessage);
+    }
+
+    static int pendingCountForTest() {
+        return PENDING.size();
     }
 
     private static native int nativeCreateClient(
