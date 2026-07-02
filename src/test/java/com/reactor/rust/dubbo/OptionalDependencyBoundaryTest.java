@@ -26,6 +26,8 @@ class OptionalDependencyBoundaryTest {
                     Class.forName("com.reactor.rust.dubbo.internal.nativeclient.StaticNativeDubboReference", false, loader));
             assertDoesNotThrow(() ->
                     Class.forName("com.reactor.rust.dubbo.NativeDubboMethodInvoker", false, loader));
+            assertDoesNotThrow(() ->
+                    Class.forName("com.reactor.rust.dubbo.PendingNativeDubboInvocations", false, loader));
         }
     }
 }

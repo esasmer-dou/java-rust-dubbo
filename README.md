@@ -31,7 +31,7 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.1.0-rc4</version>
+  <version>0.1.0</version>
 </dependency>
 ```
 
@@ -77,7 +77,7 @@ For the smallest static-provider native setup, use the `native-static` classifie
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.1.0-rc4</version>
+  <version>0.1.0</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -105,7 +105,7 @@ Classes under `com.reactor.rust.dubbo.internal.*` are implementation details. Th
 - `internal.runtime`: Dubbo runtime model and low-RSS Netty tuning.
 - `internal.util`: small runtime utilities.
 
-Do not import `internal.*` from your service. Those packages can change between release candidates without source compatibility guarantees.
+Do not import `internal.*` from your service. Those packages can change between minor or patch releases without source compatibility guarantees. Source compatibility is guaranteed only for the public root API.
 
 ## Quick Start
 
@@ -142,11 +142,11 @@ What this means:
 
 - `transport=native` tells the library to use the Rust Dubbo data-plane.
 - `runtime-profile=micro-dubbo` keeps native workers, queues, refresh queues, and Netty fallback settings narrow.
-- `providers=host:port` tells the consumer where the provider is. With this set, Java ZooKeeper is not started.
+- `providers=host:port` tells `NativeDubboConsumerClient` where the provider is. With this set, the native low-RSS path does not start Java ZooKeeper.
 - `retries=0` keeps latency predictable and avoids duplicate provider calls.
 - `max-inflight` and native queue settings prevent unlimited memory growth under load.
 
-If you leave `reactor.dubbo.providers` empty, the client uses ZooKeeper discovery. That is supported, but it adds Java ZooKeeper classes and at least a small discovery thread footprint. Use it when provider failover must come from ZooKeeper; otherwise prefer static providers, Kubernetes service DNS, or a sidecar-generated provider list.
+If you leave `reactor.dubbo.providers` empty, `NativeDubboConsumerClient` uses ZooKeeper discovery. That is supported, but it adds Java ZooKeeper classes and at least a small discovery thread footprint. Use it when provider failover must come from ZooKeeper; otherwise prefer static providers, Kubernetes service DNS, or a sidecar-generated provider list.
 
 For very small pods, also tune the host JVM. The library can keep Dubbo small, but OpenJ9 still needs
 an explicit small CPU view to avoid extra JVM worker/JIT footprint:
@@ -319,7 +319,7 @@ REACTOR_DUBBO_NATIVE_ASYNC_WORKERS=8
 | --- | ---: | --- | --- |
 | `reactor.dubbo.application-name` | `rust-java-rest-dubbo-consumer` | Name used by the consumer. Mostly useful for diagnostics and official-mode metadata. | Change it to your service name, for example `orders-api`. |
 | `reactor.dubbo.transport` | `native` | Chooses the transport. `native` uses Rust; `official` uses the optional Apache Dubbo stack. | Keep `native` for low RSS. Use `official` only when you need full Dubbo behavior. |
-| `reactor.dubbo.providers` | empty | Static provider list in `host:port,host2:port` format. When set, Java ZooKeeper is not started. | Set this in Kubernetes/service-DNS/sidecar mode. This is the simplest low-RSS path. |
+| `reactor.dubbo.providers` | empty | Static provider list in `host:port,host2:port` format. When set, `NativeDubboConsumerClient` skips Java ZooKeeper discovery. | Set this in Kubernetes/service-DNS/sidecar mode. This is the simplest low-RSS path. |
 | `reactor.dubbo.registry-address` | `zookeeper://127.0.0.1:2181` | ZooKeeper address used only when `providers` is empty. | Change it only if you want ZooKeeper discovery. |
 | `reactor.dubbo.registry-root` | `dubbo` | Root path for provider nodes in ZooKeeper. | Change it if your Dubbo providers are registered under a custom root. |
 | `reactor.dubbo.registry-check` | `false` | Controls whether registry availability should be treated as startup-critical in discovery mode. | Keep `false` for rolling deployments. Use readiness checks if startup must fail when registry is missing. |
@@ -396,7 +396,7 @@ Use balanced when Dubbo throughput matters more and you have enough provider cap
 
 Native mode is the default because it keeps the hot JVM smaller. It avoids loading the official Dubbo `ReferenceConfig`, registry directory, official remoting, Netty, Java ZooKeeper client, Hessian Lite on the hot no-arg `byte[]` path, config-center, metadata-center, tracing, metrics modules, and extra transport codecs.
 
-Official mode is still useful when correctness depends on full Dubbo behavior. If you use official mode, add the required optional dependencies explicitly and expect higher RSS.
+Official mode is still useful when correctness depends on full Dubbo behavior. Use `DubboConsumers`/`DubboConsumerClient` only for this compatibility path. If you use official mode, add the required optional dependencies explicitly and expect higher RSS.
 
 ## Current Native-Mode Limits
 
@@ -418,12 +418,12 @@ mvn clean verify
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-0.1.0-rc4.jar`
-- `java-rust-dubbo-0.1.0-rc4-native-static.jar`
-- `java-rust-dubbo-0.1.0-rc4-sources.jar`
+- `java-rust-dubbo-0.1.0.jar`
+- `java-rust-dubbo-0.1.0-native-static.jar`
+- `java-rust-dubbo-0.1.0-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v0.1.0-rc4.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.1.0.md)
 - [Turkish README](README.tr.md)
