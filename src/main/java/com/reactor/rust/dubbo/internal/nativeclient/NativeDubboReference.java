@@ -123,6 +123,7 @@ final class NativeDubboReference<T> implements NativeDubboReferenceHandle<T> {
                 valueOrDefault(spec.timeoutMs(), config.timeoutMs()),
                 config.maxInflight(),
                 config.maxResponseBytes(),
-                config.nativeConnectionsPerEndpoint());
+                config.nativeConnectionsPerEndpoint(),
+                config.nativeMaxIdleConnectionsPerEndpoint());
     }
 }

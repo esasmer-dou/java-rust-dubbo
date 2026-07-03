@@ -30,8 +30,10 @@ class DubboConsumerConfigTest {
         properties.setProperty("reactor.dubbo.max-inflight", "128");
         properties.setProperty("reactor.dubbo.max-response-bytes", "4096");
         properties.setProperty("reactor.dubbo.native-connections-per-endpoint", "24");
+        properties.setProperty("reactor.dubbo.native-max-idle-connections-per-endpoint", "3");
         properties.setProperty("reactor.dubbo.native-async-workers", "6");
         properties.setProperty("reactor.dubbo.native-async-queue-capacity", "256");
+        properties.setProperty("reactor.dubbo.native-async-transport", "tokio-demux");
         properties.setProperty("reactor.dubbo.providers", "10.0.0.1:20880, 10.0.0.2:20880");
         properties.setProperty("reactor.dubbo.runtime-profile", "throughput");
         properties.setProperty("reactor.dubbo.transport", "official");
@@ -47,8 +49,10 @@ class DubboConsumerConfigTest {
         assertEquals(128, config.maxInflight());
         assertEquals(4096, config.maxResponseBytes());
         assertEquals(24, config.nativeConnectionsPerEndpoint());
+        assertEquals(3, config.nativeMaxIdleConnectionsPerEndpoint());
         assertEquals(6, config.nativeAsyncWorkers());
         assertEquals(256, config.nativeAsyncQueueCapacity());
+        assertEquals("tokio-demux", config.nativeAsyncTransport());
         assertEquals("10.0.0.1:20880,10.0.0.2:20880", config.providers());
         assertEquals("throughput", config.runtimeProfile());
         assertEquals("official", config.transport());
@@ -67,6 +71,9 @@ class DubboConsumerConfigTest {
                 .build());
         assertThrows(IllegalArgumentException.class, () -> DubboConsumerConfig.builder()
                 .transport("grpc")
+                .build());
+        assertThrows(IllegalArgumentException.class, () -> DubboConsumerConfig.builder()
+                .nativeAsyncTransport("unbounded")
                 .build());
     }
 
@@ -87,8 +94,10 @@ class DubboConsumerConfigTest {
         assertEquals("native", config.transport());
         assertEquals(32, config.maxInflight());
         assertEquals(1, config.nativeConnectionsPerEndpoint());
+        assertEquals(1, config.nativeMaxIdleConnectionsPerEndpoint());
         assertEquals(1, config.nativeAsyncWorkers());
         assertEquals(32, config.nativeAsyncQueueCapacity());
+        assertEquals("blocking", config.nativeAsyncTransport());
     }
 
 }

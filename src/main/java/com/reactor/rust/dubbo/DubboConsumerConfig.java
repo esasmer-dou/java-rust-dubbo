@@ -18,6 +18,7 @@ public final class DubboConsumerConfig {
     public static final String DEFAULT_RUNTIME_PROFILE = RUNTIME_PROFILE_MICRO_DUBBO;
     public static final String RUNTIME_PROFILE_BALANCED_DUBBO = "balanced-dubbo";
     public static final String DEFAULT_TRANSPORT = "native";
+    public static final String DEFAULT_NATIVE_ASYNC_TRANSPORT = "blocking";
 
     private final String applicationName;
     private final String registryAddress;
@@ -38,8 +39,10 @@ public final class DubboConsumerConfig {
     private final int maxInflight;
     private final int maxResponseBytes;
     private final int nativeConnectionsPerEndpoint;
+    private final int nativeMaxIdleConnectionsPerEndpoint;
     private final int nativeAsyncWorkers;
     private final int nativeAsyncQueueCapacity;
+    private final String nativeAsyncTransport;
     private final String runtimeProfile;
     private final String transport;
     private final String cluster;
@@ -65,8 +68,12 @@ public final class DubboConsumerConfig {
         this.maxInflight = requireNonNegative(builder.maxInflight, "maxInflight");
         this.maxResponseBytes = requirePositive(builder.maxResponseBytes, "maxResponseBytes");
         this.nativeConnectionsPerEndpoint = requirePositive(builder.nativeConnectionsPerEndpoint, "nativeConnectionsPerEndpoint");
+        this.nativeMaxIdleConnectionsPerEndpoint = requireNonNegative(
+                builder.nativeMaxIdleConnectionsPerEndpoint,
+                "nativeMaxIdleConnectionsPerEndpoint");
         this.nativeAsyncWorkers = requirePositive(builder.nativeAsyncWorkers, "nativeAsyncWorkers");
         this.nativeAsyncQueueCapacity = requirePositive(builder.nativeAsyncQueueCapacity, "nativeAsyncQueueCapacity");
+        this.nativeAsyncTransport = normalizeNativeAsyncTransport(builder.nativeAsyncTransport);
         this.runtimeProfile = normalizeRuntimeProfile(builder.runtimeProfile);
         this.transport = normalizeTransport(builder.transport);
         this.cluster = requireText(builder.cluster, "cluster");
@@ -110,9 +117,12 @@ public final class DubboConsumerConfig {
         builder.maxResponseBytes(readInt(properties, "max-response-bytes", builder.maxResponseBytes));
         builder.nativeConnectionsPerEndpoint(readInt(properties, "native-connections-per-endpoint",
                 builder.nativeConnectionsPerEndpoint));
+        builder.nativeMaxIdleConnectionsPerEndpoint(readInt(properties, "native-max-idle-connections-per-endpoint",
+                builder.nativeMaxIdleConnectionsPerEndpoint));
         builder.nativeAsyncWorkers(readInt(properties, "native-async-workers", builder.nativeAsyncWorkers));
         builder.nativeAsyncQueueCapacity(readInt(properties, "native-async-queue-capacity",
                 builder.nativeAsyncQueueCapacity));
+        builder.nativeAsyncTransport(readString(properties, "native-async-transport", builder.nativeAsyncTransport));
         builder.runtimeProfile(readString(properties, "runtime-profile", builder.runtimeProfile));
         builder.transport(readString(properties, "transport", builder.transport));
         builder.cluster(readString(properties, "cluster", builder.cluster));
@@ -200,12 +210,20 @@ public final class DubboConsumerConfig {
         return nativeConnectionsPerEndpoint;
     }
 
+    public int nativeMaxIdleConnectionsPerEndpoint() {
+        return nativeMaxIdleConnectionsPerEndpoint;
+    }
+
     public int nativeAsyncWorkers() {
         return nativeAsyncWorkers;
     }
 
     public int nativeAsyncQueueCapacity() {
         return nativeAsyncQueueCapacity;
+    }
+
+    public String nativeAsyncTransport() {
+        return nativeAsyncTransport;
     }
 
     public String runtimeProfile() {
@@ -279,6 +297,14 @@ public final class DubboConsumerConfig {
         String value = requireText(transport, "transport").toLowerCase(Locale.ROOT);
         if (!"native".equals(value) && !"official".equals(value)) {
             throw new IllegalArgumentException("transport must be native or official");
+        }
+        return value;
+    }
+
+    private static String normalizeNativeAsyncTransport(String transport) {
+        String value = requireText(transport, "nativeAsyncTransport").toLowerCase(Locale.ROOT);
+        if (!"blocking".equals(value) && !"tokio-demux".equals(value)) {
+            throw new IllegalArgumentException("nativeAsyncTransport must be blocking or tokio-demux");
         }
         return value;
     }
@@ -366,8 +392,10 @@ public final class DubboConsumerConfig {
         private int maxInflight = 32;
         private int maxResponseBytes = 8 * 1024 * 1024;
         private int nativeConnectionsPerEndpoint = 1;
+        private int nativeMaxIdleConnectionsPerEndpoint = 1;
         private int nativeAsyncWorkers = 1;
         private int nativeAsyncQueueCapacity = 32;
+        private String nativeAsyncTransport = DEFAULT_NATIVE_ASYNC_TRANSPORT;
         private String runtimeProfile = DEFAULT_RUNTIME_PROFILE;
         private String transport = DEFAULT_TRANSPORT;
         private String cluster = DEFAULT_CLUSTER;
@@ -470,6 +498,11 @@ public final class DubboConsumerConfig {
             return this;
         }
 
+        public Builder nativeMaxIdleConnectionsPerEndpoint(int nativeMaxIdleConnectionsPerEndpoint) {
+            this.nativeMaxIdleConnectionsPerEndpoint = nativeMaxIdleConnectionsPerEndpoint;
+            return this;
+        }
+
         public Builder nativeAsyncWorkers(int nativeAsyncWorkers) {
             this.nativeAsyncWorkers = nativeAsyncWorkers;
             return this;
@@ -477,6 +510,11 @@ public final class DubboConsumerConfig {
 
         public Builder nativeAsyncQueueCapacity(int nativeAsyncQueueCapacity) {
             this.nativeAsyncQueueCapacity = nativeAsyncQueueCapacity;
+            return this;
+        }
+
+        public Builder nativeAsyncTransport(String nativeAsyncTransport) {
+            this.nativeAsyncTransport = nativeAsyncTransport;
             return this;
         }
 

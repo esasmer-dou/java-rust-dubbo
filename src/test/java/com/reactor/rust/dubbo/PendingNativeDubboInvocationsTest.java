@@ -35,10 +35,42 @@ class PendingNativeDubboInvocationsTest {
     }
 
     @Test
+    void completeNativeResponseRemovesPendingAndCompletesFuture() throws Exception {
+        PendingNativeDubboInvocations pending = new PendingNativeDubboInvocations();
+        PendingNativeDubboInvocations.PendingNativeResponseCall call = pending.beginNativeResponse(7);
+
+        pending.completeNativeResponse(
+                call.callbackId(),
+                42,
+                201,
+                "application/json; charset=utf-8",
+                "",
+                null);
+
+        NativeResponseHandle handle = call.future().get();
+        assertEquals(42, handle.nativeId());
+        assertEquals(201, handle.statusCode());
+        assertEquals("application/json; charset=utf-8", handle.contentType());
+        assertEquals(0, pending.size());
+    }
+
+    @Test
+    void invalidNativeResponseHandleFailsFuture() {
+        PendingNativeDubboInvocations pending = new PendingNativeDubboInvocations();
+        PendingNativeDubboInvocations.PendingNativeResponseCall call = pending.beginNativeResponse(7);
+
+        pending.completeNativeResponse(call.callbackId(), 0, 0, "", "", null);
+
+        ExecutionException error = assertThrows(ExecutionException.class, () -> call.future().get());
+        assertInstanceOf(DubboConsumerException.class, error.getCause());
+        assertEquals(0, pending.size());
+    }
+
+    @Test
     void closeClientFailsOnlyMatchingClientCalls() {
         PendingNativeDubboInvocations pending = new PendingNativeDubboInvocations();
         PendingNativeDubboInvocations.PendingCall first = pending.begin(1);
-        PendingNativeDubboInvocations.PendingCall second = pending.begin(2);
+        PendingNativeDubboInvocations.PendingNativeResponseCall second = pending.beginNativeResponse(2);
 
         pending.closeClient(1, new DubboConsumerException("closed"));
 
@@ -46,7 +78,7 @@ class PendingNativeDubboInvocationsTest {
         assertInstanceOf(DubboConsumerException.class, error.getCause());
         assertEquals(1, pending.size());
 
-        pending.complete(second.callbackId(), new byte[] {9}, null);
+        pending.completeNativeResponse(second.callbackId(), 9, 200, "application/json; charset=utf-8", "", null);
         assertEquals(0, pending.size());
     }
 }

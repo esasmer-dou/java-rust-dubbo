@@ -36,7 +36,7 @@ Bu kütüphane, "dependency ekleyince her şeyi otomatik yapsın" yaklaşımınd
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
 </dependency>
 ```
 
@@ -82,7 +82,7 @@ En küçük static-provider native kurulum için full JAR yerine `native-static`
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -164,7 +164,30 @@ public interface CatalogProviderApi {
 }
 ```
 
-Bu `byte[]` JSON olabilir. REST handler tarafında bunu doğrudan `RawResponse.json(...)` ile döndürebilirsiniz. Böylece büyük Java DTO graph oluşturmadan provider cevabını HTTP response'a taşırsınız.
+Bu `byte[]` JSON olabilir. En düşük heap yolu için response'u `invokeNativeJsonResponseAsync()` ile native handle olarak alıp `RawResponse.nativeResponse(handle.nativeId())` ile döndürün. Java handler response bytes'ını gerçekten okuyacaksa `invokeAsync()` + `RawResponse.json(...)` yolu hâlâ desteklenir.
+
+Request body zaten JSON bytes ise command/read-with-parameter route'ları için native path şu düşük-overhead imzaları da destekler:
+
+```java
+public interface CustomerCommandApi {
+    byte[] createCustomer(byte[] commandJson);
+
+    byte[] patchCustomer(long customerId, byte[] commandJson);
+}
+```
+
+Bu imzalarda request encode Rust tarafındaki küçük Hessian subset ile yapılır, provider'ın JSON response'u da Java heap'e `byte[]` olarak alınmadan native HTTP body handle olarak taşınır. Typed record/list metotları sadece consumer gerçekten domain alanlarını okuyacaksa kullanın.
+
+REST JSON pass-through için mümkünse yeni native HTTP response handle yolunu tercih edin:
+
+```java
+public CompletableFuture<ResponseEntity<RawResponse>> catalog() {
+    return invoker.invokeNativeJsonResponseAsync()
+            .thenApply(handle -> ResponseEntity.ok(RawResponse.nativeResponse(handle.nativeId())));
+}
+```
+
+Bu akışta provider JSON body Java heap'e `byte[]` olarak alınmaz; Rust native tarafta tutulur ve Java tarafına sadece küçük bir response id gelir. Java handler response'u inceleyecek, dönüştürecek, validate edecek veya loglayacaksa eski `invokeAsync().thenApply(bytes -> RawResponse.json(bytes))` yolu hâlâ doğru ve desteklenen yoldur.
 
 ### 4. Consumer Client'i Uygulama Başlangıcında Bir Kez Oluşturun
 
@@ -179,6 +202,7 @@ import com.reactor.rust.dubbo.DubboReferenceSpec;
 import com.reactor.rust.dubbo.NativeDubboConsumerClient;
 import com.reactor.rust.dubbo.NativeDubboConsumers;
 import com.reactor.rust.dubbo.NativeDubboMethodInvoker;
+import com.reactor.rust.dubbo.NativeResponseHandle;
 
 @Configuration
 public final class DubboClientConfiguration {
@@ -219,6 +243,7 @@ Handler veya business service içinde doğrudan Dubbo detaylarıyla çalışmama
 
 ```java
 import com.reactor.rust.dubbo.NativeDubboMethodInvoker;
+import com.reactor.rust.dubbo.NativeResponseHandle;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -235,6 +260,10 @@ public final class CatalogClient {
 
     public CompletableFuture<byte[]> nestedCatalogJsonAsync() {
         return nestedCatalogJson.invokeAsync();
+    }
+
+    public CompletableFuture<NativeResponseHandle> nestedCatalogNativeJsonAsync() {
+        return nestedCatalogJson.invokeNativeJsonResponseAsync();
     }
 }
 ```
@@ -265,8 +294,8 @@ public final class CatalogHandler {
             responseType = RawResponse.class
     )
     public CompletableFuture<ResponseEntity<RawResponse>> catalog() {
-        return catalogClient.nestedCatalogJsonAsync()
-                .thenApply(json -> ResponseEntity.ok(RawResponse.json(json)));
+        return catalogClient.nestedCatalogNativeJsonAsync()
+                .thenApply(handle -> ResponseEntity.ok(RawResponse.nativeResponse(handle.nativeId())));
     }
 }
 ```
@@ -344,6 +373,7 @@ REACTOR_DUBBO_NATIVE_ASYNC_WORKERS=8
 | `reactor.dubbo.native-connections-per-endpoint` | `16` | Her provider endpoint için Rust keepalive TCP connection limitidir. | Low-RSS için `2`. Balanced kullanım için `16` iyi başlangıçtır. |
 | `reactor.dubbo.native-async-workers` | `2` | Async Dubbo çağrı işleyici worker sayısıdır. | Low-RSS için küçük tutun. Throughput için benchmark ile artırın. |
 | `reactor.dubbo.native-async-queue-capacity` | `128` | Async çağrı queue limitidir. Doluysa çağrı fail-fast olur. | Her zaman bounded kalsın. Worker ve route bulkhead ile birlikte ayarlayın. |
+| `reactor.dubbo.native-async-transport` | `blocking` | Async çalışma modelidir. `blocking` en küçük worker modelini kullanır; `tokio-demux` provider connection üzerinde Rust async request-id demux kullanır. | En düşük RSS ve düşük trafik için `blocking`. Read-heavy/yüksek concurrency için Docker RSS + p99 gate geçerse `tokio-demux`. |
 
 ### ZooKeeper ve Official Mode Ayarları
 
@@ -417,6 +447,6 @@ mvn clean verify
 
 Üretilen paketler:
 
-- `target/java-rust-dubbo-0.1.0.jar`
-- `target/java-rust-dubbo-0.1.0-native-static.jar`
-- `target/java-rust-dubbo-0.1.0-sources.jar`
+- `target/java-rust-dubbo-0.2.0.jar`
+- `target/java-rust-dubbo-0.2.0-native-static.jar`
+- `target/java-rust-dubbo-0.2.0-sources.jar`

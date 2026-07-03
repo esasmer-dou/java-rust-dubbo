@@ -10,6 +10,7 @@ import java.util.function.Supplier;
 
 public final class NativeDubboMethodInvoker<R> {
 
+    private static final String DEFAULT_DUBBO_VERSION = "0.0.0";
     private static final Object[] EMPTY_ARGS = new Object[0];
 
     private final int clientId;
@@ -23,6 +24,8 @@ public final class NativeDubboMethodInvoker<R> {
     private final String parameterTypesDesc;
     private final ClassLoader codecClassLoader;
     private final boolean nativeByteArrayNoArgs;
+    private final boolean nativeByteArrayArg;
+    private final boolean nativeLongByteArrayArgs;
     private final Supplier<NativeDubboMethodInvoker<R>> delegateSupplier;
     private volatile NativeDubboMethodInvoker<R> delegate;
     private volatile Object legacyPlan;
@@ -38,13 +41,20 @@ public final class NativeDubboMethodInvoker<R> {
         this.timeoutMs = valueOrDefault(spec.timeoutMs(), config.timeoutMs());
         this.serviceName = spec.serviceInterface().getName();
         this.group = spec.group();
-        this.version = spec.version();
+        this.version = defaultVersion(spec.version());
         this.methodName = method.getName();
         this.returnType = Objects.requireNonNull(returnType, "returnType");
         this.parameterTypes = method.getParameterTypes();
         this.parameterTypesDesc = NativeDubboDescriptor.parameterTypesDesc(parameterTypes);
         this.codecClassLoader = codecClassLoader(spec, method, returnType);
         this.nativeByteArrayNoArgs = this.returnType == byte[].class && this.parameterTypes.length == 0;
+        this.nativeByteArrayArg = this.returnType == byte[].class
+                && this.parameterTypes.length == 1
+                && this.parameterTypes[0] == byte[].class;
+        this.nativeLongByteArrayArgs = this.returnType == byte[].class
+                && this.parameterTypes.length == 2
+                && this.parameterTypes[0] == long.class
+                && this.parameterTypes[1] == byte[].class;
         this.delegateSupplier = null;
     }
 
@@ -60,6 +70,8 @@ public final class NativeDubboMethodInvoker<R> {
         this.parameterTypesDesc = "";
         this.codecClassLoader = null;
         this.nativeByteArrayNoArgs = false;
+        this.nativeByteArrayArg = false;
+        this.nativeLongByteArrayArgs = false;
         this.delegateSupplier = Objects.requireNonNull(delegateSupplier, "delegateSupplier");
     }
 
@@ -89,6 +101,60 @@ public final class NativeDubboMethodInvoker<R> {
 
     public CompletableFuture<R> invokeAsync(Object... args) {
         return invokeAsyncWithArgs(args == null ? EMPTY_ARGS : args);
+    }
+
+    public CompletableFuture<NativeResponseHandle> invokeNativeJsonResponseAsync() {
+        if (delegateSupplier != null) {
+            return delegate().invokeNativeJsonResponseAsync();
+        }
+        if (!nativeByteArrayNoArgs) {
+            return CompletableFuture.failedFuture(new DubboConsumerException(
+                    "Native JSON response handle is supported only for no-arg byte[] Dubbo methods"));
+        }
+        return NativeDubboBridge.invokeByteArrayNoArgsNativeJsonAsync(
+                clientId,
+                serviceName,
+                group,
+                version,
+                methodName,
+                timeoutMs);
+    }
+
+    public CompletableFuture<NativeResponseHandle> invokeNativeJsonResponseAsync(byte[] arg0) {
+        if (delegateSupplier != null) {
+            return delegate().invokeNativeJsonResponseAsync(arg0);
+        }
+        if (!nativeByteArrayArg) {
+            return CompletableFuture.failedFuture(new DubboConsumerException(
+                    "Native JSON response handle with byte[] arg is supported only for byte[] -> byte[] Dubbo methods"));
+        }
+        return NativeDubboBridge.invokeByteArrayArgNativeJsonAsync(
+                clientId,
+                serviceName,
+                group,
+                version,
+                methodName,
+                arg0,
+                timeoutMs);
+    }
+
+    public CompletableFuture<NativeResponseHandle> invokeNativeJsonResponseAsync(long arg0, byte[] arg1) {
+        if (delegateSupplier != null) {
+            return delegate().invokeNativeJsonResponseAsync(arg0, arg1);
+        }
+        if (!nativeLongByteArrayArgs) {
+            return CompletableFuture.failedFuture(new DubboConsumerException(
+                    "Native JSON response handle with long, byte[] args is supported only for long, byte[] -> byte[] Dubbo methods"));
+        }
+        return NativeDubboBridge.invokeLongByteArrayArgsNativeJsonAsync(
+                clientId,
+                serviceName,
+                group,
+                version,
+                methodName,
+                arg0,
+                arg1,
+                timeoutMs);
     }
 
     private R invokeWithArgs(Object[] args) {
@@ -206,5 +272,9 @@ public final class NativeDubboMethodInvoker<R> {
 
     private static int valueOrDefault(Integer value, int defaultValue) {
         return value == null ? defaultValue : value;
+    }
+
+    private static String defaultVersion(String value) {
+        return value == null || value.isBlank() ? DEFAULT_DUBBO_VERSION : value;
     }
 }

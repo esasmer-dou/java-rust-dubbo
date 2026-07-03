@@ -31,7 +31,7 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
 </dependency>
 ```
 
@@ -77,7 +77,7 @@ For the smallest static-provider native setup, use the `native-static` classifie
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -174,6 +174,29 @@ public interface CatalogProviderApi {
 
 The returned `byte[]` can be JSON, MessagePack, protobuf bytes, or any binary payload your HTTP layer knows how to represent.
 
+For command/read-with-parameter routes where the request body is already JSON, the native path also supports these low-overhead signatures:
+
+```java
+public interface CustomerCommandApi {
+    byte[] createCustomer(byte[] commandJson);
+
+    byte[] patchCustomer(long customerId, byte[] commandJson);
+}
+```
+
+These signatures keep request encoding in the Rust Hessian subset and keep the provider JSON response as a native HTTP body handle. Use typed record/list methods only when the consumer must inspect domain fields.
+
+For REST JSON pass-through, prefer the native HTTP response handle path when possible:
+
+```java
+public CompletableFuture<ResponseEntity<RawResponse>> catalog() {
+    return invoker.invokeNativeJsonResponseAsync()
+            .thenApply(handle -> ResponseEntity.ok(RawResponse.nativeResponse(handle.nativeId())));
+}
+```
+
+This keeps the provider JSON body in Rust native memory and sends only a small response id through Java. Use the older `invokeAsync().thenApply(bytes -> RawResponse.json(bytes))` path when the Java handler must inspect, transform, validate, or log the response bytes.
+
 ### 4. Create One Native Consumer Client At Startup
 
 Create the consumer once and reuse it. Do not create a Dubbo client per request.
@@ -187,6 +210,7 @@ import com.reactor.rust.dubbo.DubboReferenceSpec;
 import com.reactor.rust.dubbo.NativeDubboConsumerClient;
 import com.reactor.rust.dubbo.NativeDubboConsumers;
 import com.reactor.rust.dubbo.NativeDubboMethodInvoker;
+import com.reactor.rust.dubbo.NativeResponseHandle;
 
 @Configuration
 public final class DubboClientConfiguration {
@@ -227,6 +251,7 @@ This wrapper keeps the rest of your application clean. Your handlers and service
 
 ```java
 import com.reactor.rust.dubbo.NativeDubboMethodInvoker;
+import com.reactor.rust.dubbo.NativeResponseHandle;
 
 import java.util.concurrent.CompletableFuture;
 
@@ -243,6 +268,10 @@ public final class CatalogClient {
 
     public CompletableFuture<byte[]> nestedCatalogJsonAsync() {
         return nestedCatalogJson.invokeAsync();
+    }
+
+    public CompletableFuture<NativeResponseHandle> nestedCatalogNativeJsonAsync() {
+        return nestedCatalogJson.invokeNativeJsonResponseAsync();
     }
 }
 ```
@@ -273,8 +302,8 @@ public final class CatalogHandler {
             responseType = RawResponse.class
     )
     public CompletableFuture<ResponseEntity<RawResponse>> catalog() {
-        return catalogClient.nestedCatalogJsonAsync()
-                .thenApply(json -> ResponseEntity.ok(RawResponse.json(json)));
+        return catalogClient.nestedCatalogNativeJsonAsync()
+                .thenApply(handle -> ResponseEntity.ok(RawResponse.nativeResponse(handle.nativeId())));
     }
 }
 ```
@@ -346,6 +375,7 @@ REACTOR_DUBBO_NATIVE_ASYNC_WORKERS=8
 | `reactor.dubbo.native-connections-per-endpoint` | `16` | Max keepalive TCP connections per provider endpoint. One connection carries one in-flight call at a time. | Low RSS can use `2`. Balanced throughput often uses `16`. |
 | `reactor.dubbo.native-async-workers` | `2` | Native worker count used for async Dubbo calls. | Low RSS can keep this small. Balanced throughput should raise it with load tests. |
 | `reactor.dubbo.native-async-queue-capacity` | `128` | Bounded queue for native async calls. If full, calls fail fast instead of growing memory. | Keep bounded. Raise together with workers and route-level limits. |
+| `reactor.dubbo.native-async-transport` | `blocking` | Async execution model. `blocking` uses the smallest worker model; `tokio-demux` uses Rust async request-id demux over provider connections. | Use `blocking` for lowest RSS and low traffic. Use `tokio-demux` for read-heavy/high-concurrency routes after a Docker RSS + p99 gate. |
 
 ### ZooKeeper And Official-Mode Properties
 
@@ -418,12 +448,12 @@ mvn clean verify
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-0.1.0.jar`
-- `java-rust-dubbo-0.1.0-native-static.jar`
-- `java-rust-dubbo-0.1.0-sources.jar`
+- `java-rust-dubbo-0.2.0.jar`
+- `java-rust-dubbo-0.2.0-native-static.jar`
+- `java-rust-dubbo-0.2.0-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v0.1.0.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.2.0.md)
 - [Turkish README](README.tr.md)
