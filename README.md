@@ -31,7 +31,7 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.2.2</version>
+  <version>0.2.3</version>
 </dependency>
 ```
 
@@ -77,7 +77,7 @@ For the smallest static-provider native setup, use the `native-static` classifie
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.2.2</version>
+  <version>0.2.3</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -162,7 +162,8 @@ ANTI-PATTERN: adding an automatic provider scanner that exports every interface 
 Provider-side DB helpers are optional. Use them when a plain Dubbo provider needs the same
 low-boilerplate JDBC/Hikari lifecycle pattern as the sample provider. They do not generate SQL and
 they do not map rows automatically. Your provider still owns SQL, indexes, row mapping, transaction
-boundaries, and write idempotency.
+boundaries, and write idempotency. Hikari pool tuning keys have small built-in defaults, so a
+provider can start with only JDBC URL, driver, username and password.
 
 ## Quick Start
 
@@ -505,12 +506,12 @@ mvn clean verify
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-0.2.2.jar`
-- `java-rust-dubbo-0.2.2-native-static.jar`
-- `java-rust-dubbo-0.2.2-sources.jar`
+- `java-rust-dubbo-0.2.3.jar`
+- `java-rust-dubbo-0.2.3-native-static.jar`
+- `java-rust-dubbo-0.2.3-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v0.2.2.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.2.3.md)
 - [Turkish README](README.tr.md)

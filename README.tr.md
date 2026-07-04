@@ -36,7 +36,7 @@ Bu kütüphane, "dependency ekleyince her şeyi otomatik yapsın" yaklaşımınd
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.2.2</version>
+  <version>0.2.3</version>
 </dependency>
 ```
 
@@ -82,7 +82,7 @@ En küçük static-provider native kurulum için full JAR yerine `native-static`
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.2.2</version>
+  <version>0.2.3</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -167,7 +167,8 @@ taşıyın. ANTI-PATTERN: classpath'teki her interface'i otomatik export eden gi
 Provider tarafındaki DB yardımcıları opsiyoneldir. Plain Dubbo provider aynı sample provider gibi
 düşük boilerplate JDBC/Hikari lifecycle kalıbı istiyorsa kullanılmalıdır. Bu sınıflar SQL üretmez ve
 row mapping'i otomatik tahmin etmez. SQL, index, row mapping, transaction sınırı ve write idempotency
-kararı provider uygulamasında kalır.
+kararı provider uygulamasında kalır. Hikari pool tuning key'leri küçük default değerlerle gelir; bu
+yüzden provider başlangıçta sadece JDBC URL, driver, username ve password ile ayağa kalkabilir.
 
 ## Hızlı Başlangıç
 
@@ -504,6 +505,6 @@ mvn clean verify
 
 Üretilen paketler:
 
-- `target/java-rust-dubbo-0.2.2.jar`
-- `target/java-rust-dubbo-0.2.2-native-static.jar`
-- `target/java-rust-dubbo-0.2.2-sources.jar`
+- `target/java-rust-dubbo-0.2.3.jar`
+- `target/java-rust-dubbo-0.2.3-native-static.jar`
+- `target/java-rust-dubbo-0.2.3-sources.jar`
