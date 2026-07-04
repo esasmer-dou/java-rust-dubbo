@@ -31,7 +31,7 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.2.1</version>
+  <version>0.2.2</version>
 </dependency>
 ```
 
@@ -77,7 +77,7 @@ For the smallest static-provider native setup, use the `native-static` classifie
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.2.1</version>
+  <version>0.2.2</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -112,6 +112,8 @@ Common provider classes:
 - `DubboProviderSupport`
 - `PlainDubboProvider`
 - `ZookeeperDubboProviderRegistration`
+- `com.reactor.rust.dubbo.provider.jdbc.JdbcRepository`
+- `com.reactor.rust.dubbo.provider.jdbc.HikariDataSources`
 
 Classes under `com.reactor.rust.dubbo.internal.*` are implementation details. They are separated by responsibility so the runtime is easier to maintain:
 
@@ -156,6 +158,11 @@ List<DubboProviderSupport.ExportedService<?>> exported =
 
 BEST: keep the service list explicit and move only duplicated lifecycle code to these helpers.
 ANTI-PATTERN: adding an automatic provider scanner that exports every interface on the classpath.
+
+Provider-side DB helpers are optional. Use them when a plain Dubbo provider needs the same
+low-boilerplate JDBC/Hikari lifecycle pattern as the sample provider. They do not generate SQL and
+they do not map rows automatically. Your provider still owns SQL, indexes, row mapping, transaction
+boundaries, and write idempotency.
 
 ## Quick Start
 
@@ -498,12 +505,12 @@ mvn clean verify
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-0.2.1.jar`
-- `java-rust-dubbo-0.2.1-native-static.jar`
-- `java-rust-dubbo-0.2.1-sources.jar`
+- `java-rust-dubbo-0.2.2.jar`
+- `java-rust-dubbo-0.2.2-native-static.jar`
+- `java-rust-dubbo-0.2.2-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v0.2.1.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.2.2.md)
 - [Turkish README](README.tr.md)
