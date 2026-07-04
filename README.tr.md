@@ -36,7 +36,7 @@ Bu kütüphane, "dependency ekleyince her şeyi otomatik yapsın" yaklaşımınd
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.2.0</version>
+  <version>0.2.1</version>
 </dependency>
 ```
 
@@ -82,7 +82,7 @@ En küçük static-provider native kurulum için full JAR yerine `native-static`
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.2.0</version>
+  <version>0.2.1</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -100,7 +100,23 @@ Native modun çalışması için Java/Rust framework native library de yüklü o
 
 ## Kullanılacak API Sınırı
 
-Uygulama kodunda sadece doğrudan `com.reactor.rust.dubbo` altındaki sınıfları kullanın. Örnek: `DubboConsumerConfig`, `DubboReferenceSpec`, `NativeDubboConsumerClient`, `NativeDubboConsumers` ve `NativeDubboMethodInvoker`.
+Uygulama kodunda `com.reactor.rust.dubbo`, `com.reactor.rust.dubbo.support` ve
+`com.reactor.rust.dubbo.provider` altındaki public sınıfları kullanın.
+
+Sık kullanılan consumer sınıfları:
+
+- `DubboConsumerConfig`
+- `DubboReferenceSpec`
+- `NativeDubboConsumerClient`
+- `NativeDubboConsumers`
+- `NativeDubboMethodInvoker`
+- `DubboConsumerSupport`
+
+Sık kullanılan provider sınıfları:
+
+- `DubboProviderSupport`
+- `PlainDubboProvider`
+- `ZookeeperDubboProviderRegistration`
 
 `com.reactor.rust.dubbo.internal.*` altındaki sınıflar kütüphanenin iç uygulama detaylarıdır. Bu paketler sorumluluklarına göre ayrılmıştır:
 
@@ -110,7 +126,41 @@ Uygulama kodunda sadece doğrudan `com.reactor.rust.dubbo` altındaki sınıflar
 - `internal.runtime`: Dubbo runtime modeli ve low-RSS Netty tuning.
 - `internal.util`: küçük runtime yardımcıları.
 
-Servis kodunuzda `internal.*` import etmeyin. Bu paketler minor veya patch sürümler arasında değişebilir. Source compatibility garantisi yalnızca public root API için verilir.
+Servis kodunuzda `internal.*` import etmeyin. Bu paketler minor veya patch sürümler arasında değişebilir. Source compatibility garantisi yalnızca yukarıdaki public API için verilir.
+
+## Deklaratif Consumer ve Provider Yardımcıları
+
+`DubboConsumerSupport` ve `DubboProviderSupport` tekrar eden kurulum kodunu azaltır. Bu sınıflar
+business servisleri otomatik keşfetmez. Config aktif runtime yüzeyini seçer; hangi interface'in
+export edileceği ve hangi client'in kullanılacağı kodda açık kalır.
+
+Consumer örneği:
+
+```java
+DubboConsumerSupport support = DubboConsumerSupport
+        .fromProperties(PropertiesLoader.getAll())
+        .discoveryProperty("sample.dubbo.discovery");
+
+NativeDubboConsumerClient client = NativeDubboConsumers.create(support.config());
+DubboReferenceSpec<CatalogService> spec = support.reference(CatalogService.class);
+```
+
+Provider örneği:
+
+```java
+DubboProviderSupport support = DubboProviderSupport.fromProperties(appProperties);
+PlainDubboProvider.ProviderConfig config = support.providerConfig(registryEnabled);
+
+List<DubboProviderSupport.ServicePlan<?>> services = List.of(
+        support.service(CatalogService.class, catalogService),
+        support.service(CustomerQueryService.class, customerQueryService));
+
+List<DubboProviderSupport.ExportedService<?>> exported =
+        support.exportAll(config, registration, services);
+```
+
+BEST: servis listesini explicit tutun, sadece tekrar eden lifecycle kodunu bu yardımcı sınıflara
+taşıyın. ANTI-PATTERN: classpath'teki her interface'i otomatik export eden gizli scanner eklemek.
 
 ## Hızlı Başlangıç
 
@@ -447,6 +497,6 @@ mvn clean verify
 
 Üretilen paketler:
 
-- `target/java-rust-dubbo-0.2.0.jar`
-- `target/java-rust-dubbo-0.2.0-native-static.jar`
-- `target/java-rust-dubbo-0.2.0-sources.jar`
+- `target/java-rust-dubbo-0.2.1.jar`
+- `target/java-rust-dubbo-0.2.1-native-static.jar`
+- `target/java-rust-dubbo-0.2.1-sources.jar`

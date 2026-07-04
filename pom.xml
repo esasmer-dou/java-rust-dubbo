@@ -6,7 +6,7 @@
 
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.2.0</version>
+  <version>0.2.1</version>
   <packaging>jar</packaging>
 
   <name>java-rust-dubbo</name>
@@ -246,6 +246,7 @@
                 <include>com/reactor/rust/dubbo/internal/nativeclient/NativeDubboReferenceHandle*.class</include>
                 <include>com/reactor/rust/dubbo/internal/nativeclient/StaticNativeDubboReference*.class</include>
                 <include>com/reactor/rust/dubbo/internal/runtime/DubboRuntimeTuning*.class</include>
+                <include>com/reactor/rust/dubbo/support/DubboConsumerSupport*.class</include>
               </includes>
             </configuration>
           </execution>

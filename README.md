@@ -31,7 +31,7 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.2.0</version>
+  <version>0.2.1</version>
 </dependency>
 ```
 
@@ -77,7 +77,7 @@ For the smallest static-provider native setup, use the `native-static` classifie
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.2.0</version>
+  <version>0.2.1</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -95,7 +95,23 @@ The Java/Rust framework native library must also be present. In `rust-java-rest`
 
 ## Public API Boundary
 
-Use only the classes directly under `com.reactor.rust.dubbo` in application code, for example `DubboConsumerConfig`, `DubboReferenceSpec`, `NativeDubboConsumerClient`, `NativeDubboConsumers`, and `NativeDubboMethodInvoker`.
+Use the public classes under `com.reactor.rust.dubbo`, `com.reactor.rust.dubbo.support`, and
+`com.reactor.rust.dubbo.provider` in application code.
+
+Common consumer classes:
+
+- `DubboConsumerConfig`
+- `DubboReferenceSpec`
+- `NativeDubboConsumerClient`
+- `NativeDubboConsumers`
+- `NativeDubboMethodInvoker`
+- `DubboConsumerSupport`
+
+Common provider classes:
+
+- `DubboProviderSupport`
+- `PlainDubboProvider`
+- `ZookeeperDubboProviderRegistration`
 
 Classes under `com.reactor.rust.dubbo.internal.*` are implementation details. They are separated by responsibility so the runtime is easier to maintain:
 
@@ -105,7 +121,41 @@ Classes under `com.reactor.rust.dubbo.internal.*` are implementation details. Th
 - `internal.runtime`: Dubbo runtime model and low-RSS Netty tuning.
 - `internal.util`: small runtime utilities.
 
-Do not import `internal.*` from your service. Those packages can change between minor or patch releases without source compatibility guarantees. Source compatibility is guaranteed only for the public root API.
+Do not import `internal.*` from your service. Those packages can change between minor or patch releases without source compatibility guarantees. Source compatibility is guaranteed only for the public API listed above.
+
+## Declarative Consumer And Provider Helpers
+
+`DubboConsumerSupport` and `DubboProviderSupport` are small helpers for repeated setup. They do not
+discover business services automatically. Configuration selects the active runtime surface, while
+your code still lists the provider interfaces and handler wiring explicitly.
+
+Consumer example:
+
+```java
+DubboConsumerSupport support = DubboConsumerSupport
+        .fromProperties(PropertiesLoader.getAll())
+        .discoveryProperty("sample.dubbo.discovery");
+
+NativeDubboConsumerClient client = NativeDubboConsumers.create(support.config());
+DubboReferenceSpec<CatalogService> spec = support.reference(CatalogService.class);
+```
+
+Provider example:
+
+```java
+DubboProviderSupport support = DubboProviderSupport.fromProperties(appProperties);
+PlainDubboProvider.ProviderConfig config = support.providerConfig(registryEnabled);
+
+List<DubboProviderSupport.ServicePlan<?>> services = List.of(
+        support.service(CatalogService.class, catalogService),
+        support.service(CustomerQueryService.class, customerQueryService));
+
+List<DubboProviderSupport.ExportedService<?>> exported =
+        support.exportAll(config, registration, services);
+```
+
+BEST: keep the service list explicit and move only duplicated lifecycle code to these helpers.
+ANTI-PATTERN: adding an automatic provider scanner that exports every interface on the classpath.
 
 ## Quick Start
 
@@ -448,12 +498,12 @@ mvn clean verify
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-0.2.0.jar`
-- `java-rust-dubbo-0.2.0-native-static.jar`
-- `java-rust-dubbo-0.2.0-sources.jar`
+- `java-rust-dubbo-0.2.1.jar`
+- `java-rust-dubbo-0.2.1-native-static.jar`
+- `java-rust-dubbo-0.2.1-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v0.2.0.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.2.1.md)
 - [Turkish README](README.tr.md)
