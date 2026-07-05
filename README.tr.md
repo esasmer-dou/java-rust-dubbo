@@ -1,6 +1,6 @@
 # java-rust-dubbo
 
-[English](README.md) | Türkçe
+[English](https://github.com/esasmer-dou/java-rust-dubbo/blob/main/README.md) | [Turkish](https://github.com/esasmer-dou/java-rust-dubbo/blob/main/README.tr.md)
 
 `java-rust-dubbo`, Java/Rust REST framework içinde Dubbo provider çağırmak için hazırlanmış küçük ve kontrollü bir consumer kütüphanesidir.
 

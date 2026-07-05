@@ -1,6 +1,6 @@
 # java-rust-dubbo
 
-English | [Turkish](README.tr.md)
+[English](https://github.com/esasmer-dou/java-rust-dubbo/blob/main/README.md) | [Turkish](https://github.com/esasmer-dou/java-rust-dubbo/blob/main/README.tr.md)
 
 `java-rust-dubbo` is a small Dubbo consumer library for the Java/Rust REST framework.
 
