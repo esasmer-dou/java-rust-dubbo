@@ -93,10 +93,15 @@ If you need ZooKeeper discovery, argument-bearing Dubbo methods, DTO decoding, o
 
 The Java/Rust framework native library must also be present. In `rust-java-rest`, the framework loads that native library for you. In standalone tests, make sure `rust_hyper` is available through `java.library.path`.
 
+Native Dubbo transport requires Dubbo native ABI `5`. The aligned `rust-java-rest:3.2.7` runtime
+reports REST ABI `23`, Dubbo ABI `5`, and Redis ABI `5`. Framework startup verifies the packaged
+source revision and platform hash; `NativeDubboBridge` also checks the Dubbo ABI before the first
+native client is created. Do not copy a DLL/SO from an older framework release into a newer image.
+
 ## Public API Boundary
 
-Use the public classes under `com.reactor.rust.dubbo`, `com.reactor.rust.dubbo.support`, and
-`com.reactor.rust.dubbo.provider` in application code.
+Use the public classes under `com.reactor.rust.dubbo`, `com.reactor.rust.dubbo.config`,
+`com.reactor.rust.dubbo.support`, and `com.reactor.rust.dubbo.provider` in application code.
 
 Common consumer classes:
 
@@ -109,6 +114,9 @@ Common consumer classes:
 
 Common provider classes:
 
+- `DubboApplicationProperties`
+- `DubboProviderApplication`
+- `DubboProviderRuntimeTuning`
 - `DubboProviderSupport`
 - `PlainDubboProvider`
 - `ZookeeperDubboProviderRegistration`
@@ -127,9 +135,10 @@ Do not import `internal.*` from your service. Those packages can change between 
 
 ## Declarative Consumer And Provider Helpers
 
-`DubboConsumerSupport` and `DubboProviderSupport` are small helpers for repeated setup. They do not
-discover business services automatically. Configuration selects the active runtime surface, while
-your code still lists the provider interfaces and handler wiring explicitly.
+`DubboConsumerSupport` and `DubboProviderApplication` remove repeated configuration and lifecycle
+code. They do not discover business services automatically. Configuration selects the active
+runtime surface, while your code still lists every provider interface and consumer adapter
+explicitly.
 
 Consumer example:
 
@@ -145,16 +154,23 @@ DubboReferenceSpec<CatalogService> spec = support.reference(CatalogService.class
 Provider example:
 
 ```java
-DubboProviderSupport support = DubboProviderSupport.fromProperties(appProperties);
-PlainDubboProvider.ProviderConfig config = support.providerConfig(registryEnabled);
+DubboApplicationProperties properties =
+        DubboApplicationProperties.load("provider.properties");
+DubboProviderRuntimeTuning.applyLowRssDefaults(properties);
 
-List<DubboProviderSupport.ServicePlan<?>> services = List.of(
-        support.service(CatalogService.class, catalogService),
-        support.service(CustomerQueryService.class, customerQueryService));
-
-List<DubboProviderSupport.ExportedService<?>> exported =
-        support.exportAll(config, registration, services);
+DubboProviderApplication.builder(properties)
+        .name("catalog-provider")
+        .registryEnabled(properties.getBoolean("reactor.dubbo.registry-enabled"))
+        .module(context -> {
+            CatalogRepository repository =
+                    context.manage(CatalogRepository.fromProperties(properties));
+            context.service(CatalogService.class, new CatalogServiceImpl(repository));
+        })
+        .run();
 ```
+
+The application declares the service and resource. The library owns export, registry registration,
+startup rollback, shutdown hooks, and reverse-order resource cleanup.
 
 BEST: keep the service list explicit and move only duplicated lifecycle code to these helpers.
 ANTI-PATTERN: adding an automatic provider scanner that exports every interface on the classpath.

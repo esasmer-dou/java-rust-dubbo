@@ -22,24 +22,37 @@ final class NativeDubboReference<T> implements NativeDubboReferenceHandle<T> {
     private final Class<T> serviceInterface;
     private final int nativeClientId;
     private final ProviderWatcher watcher;
+    private final Executor legacyDecodeExecutor;
     private volatile T proxy;
+    private boolean closed;
     private static final Object[] EMPTY_ARGS = new Object[0];
 
     NativeDubboReference(
             DubboConsumerConfig config,
             DubboReferenceSpec<T> spec,
             ZookeeperRegistryClient zookeeper,
-            Executor refreshExecutor) {
+            Executor refreshExecutor,
+            Executor legacyDecodeExecutor) {
         this.config = Objects.requireNonNull(config, "config");
         this.spec = Objects.requireNonNull(spec, "spec");
         this.serviceInterface = spec.serviceInterface();
+        this.legacyDecodeExecutor = Objects.requireNonNull(legacyDecodeExecutor, "legacyDecodeExecutor");
         this.nativeClientId = createNativeClient(config, spec);
-        this.watcher = new NativeDubboProviderWatcher<>(
-                config,
-                spec,
-                zookeeper,
-                refreshExecutor,
-                nativeClientId);
+        try {
+            this.watcher = new NativeDubboProviderWatcher<>(
+                    config,
+                    spec,
+                    zookeeper,
+                    refreshExecutor,
+                    nativeClientId);
+        } catch (RuntimeException | LinkageError constructionFailure) {
+            try {
+                NativeDubboBridge.closeClient(nativeClientId);
+            } catch (RuntimeException | LinkageError closeFailure) {
+                constructionFailure.addSuppressed(closeFailure);
+            }
+            throw constructionFailure;
+        }
     }
 
     public void start() {
@@ -68,7 +81,8 @@ final class NativeDubboReference<T> implements NativeDubboReferenceHandle<T> {
                     config,
                     spec,
                     serviceInterface.getMethod(methodName, types),
-                    returnType);
+                    returnType,
+                    legacyDecodeExecutor);
         } catch (NoSuchMethodException e) {
             throw new DubboConsumerException("No native Dubbo method "
                     + serviceInterface.getName() + "." + methodName, e);
@@ -76,9 +90,16 @@ final class NativeDubboReference<T> implements NativeDubboReferenceHandle<T> {
     }
 
     @Override
-    public void close() {
-        watcher.close();
-        NativeDubboBridge.closeClient(nativeClientId);
+    public synchronized void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        try {
+            watcher.close();
+        } finally {
+            NativeDubboBridge.closeClient(nativeClientId);
+        }
     }
 
     private T createProxy() {
@@ -108,7 +129,8 @@ final class NativeDubboReference<T> implements NativeDubboReferenceHandle<T> {
                             config,
                             spec,
                             method,
-                            method.getReturnType()));
+                            method.getReturnType(),
+                            legacyDecodeExecutor));
             Object[] actualArgs = args == null || args.length == 0 ? EMPTY_ARGS : args;
             return invoker.invoke(actualArgs);
         }

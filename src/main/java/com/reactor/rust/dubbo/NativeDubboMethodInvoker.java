@@ -1,11 +1,13 @@
 package com.reactor.rust.dubbo;
 
 import com.reactor.rust.dubbo.internal.nativeclient.LegacyCodecSupport;
+import com.reactor.rust.dubbo.internal.nativeclient.LegacyDecodeExecutor;
 import com.reactor.rust.dubbo.internal.nativeclient.NativeDubboDescriptor;
 
 import java.lang.reflect.Method;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 
 public final class NativeDubboMethodInvoker<R> {
@@ -23,6 +25,9 @@ public final class NativeDubboMethodInvoker<R> {
     private final Class<?>[] parameterTypes;
     private final String parameterTypesDesc;
     private final ClassLoader codecClassLoader;
+    private final Executor sharedLegacyDecodeExecutor;
+    private final int legacyDecodeWorkers;
+    private final int legacyDecodeQueueCapacity;
     private final boolean nativeByteArrayNoArgs;
     private final boolean nativeByteArrayArg;
     private final boolean nativeLongByteArrayArgs;
@@ -30,6 +35,7 @@ public final class NativeDubboMethodInvoker<R> {
     private volatile NativeDubboMethodInvoker<R> delegate;
     private volatile Object legacyPlan;
     private volatile byte[] precomputedNoArgRequestBody;
+    private volatile LegacyDecodeExecutor ownedLegacyDecodeExecutor;
 
     public NativeDubboMethodInvoker(
             int clientId,
@@ -37,6 +43,16 @@ public final class NativeDubboMethodInvoker<R> {
             DubboReferenceSpec<?> spec,
             Method method,
             Class<R> returnType) {
+        this(clientId, config, spec, method, returnType, null);
+    }
+
+    public NativeDubboMethodInvoker(
+            int clientId,
+            DubboConsumerConfig config,
+            DubboReferenceSpec<?> spec,
+            Method method,
+            Class<R> returnType,
+            Executor sharedLegacyDecodeExecutor) {
         this.clientId = clientId;
         this.timeoutMs = valueOrDefault(spec.timeoutMs(), config.timeoutMs());
         this.serviceName = spec.serviceInterface().getName();
@@ -47,6 +63,9 @@ public final class NativeDubboMethodInvoker<R> {
         this.parameterTypes = method.getParameterTypes();
         this.parameterTypesDesc = NativeDubboDescriptor.parameterTypesDesc(parameterTypes);
         this.codecClassLoader = codecClassLoader(spec, method, returnType);
+        this.legacyDecodeWorkers = config.nativeAsyncWorkers();
+        this.legacyDecodeQueueCapacity = config.nativeAsyncQueueCapacity();
+        this.sharedLegacyDecodeExecutor = sharedLegacyDecodeExecutor;
         this.nativeByteArrayNoArgs = this.returnType == byte[].class && this.parameterTypes.length == 0;
         this.nativeByteArrayArg = this.returnType == byte[].class
                 && this.parameterTypes.length == 1
@@ -69,6 +88,9 @@ public final class NativeDubboMethodInvoker<R> {
         this.parameterTypes = new Class<?>[0];
         this.parameterTypesDesc = "";
         this.codecClassLoader = null;
+        this.legacyDecodeWorkers = 0;
+        this.legacyDecodeQueueCapacity = 0;
+        this.sharedLegacyDecodeExecutor = null;
         this.nativeByteArrayNoArgs = false;
         this.nativeByteArrayArg = false;
         this.nativeLongByteArrayArgs = false;
@@ -196,7 +218,29 @@ public final class NativeDubboMethodInvoker<R> {
         Object plan = legacyPlan();
         byte[] requestBody = requestBody(plan, args);
         return NativeDubboBridge.invokeAsync(clientId, requestBody, timeoutMs)
-                .thenApply(responseBody -> LegacyCodecSupport.decodeResponse(responseBody, plan));
+                .thenApplyAsync(
+                        responseBody -> LegacyCodecSupport.decodeResponse(responseBody, plan),
+                        legacyDecodeExecutor());
+    }
+
+    private Executor legacyDecodeExecutor() {
+        Executor shared = sharedLegacyDecodeExecutor;
+        if (shared != null) {
+            return shared;
+        }
+        LegacyDecodeExecutor current = ownedLegacyDecodeExecutor;
+        if (current == null) {
+            synchronized (this) {
+                current = ownedLegacyDecodeExecutor;
+                if (current == null) {
+                    current = LegacyDecodeExecutor.forLimits(
+                            legacyDecodeWorkers,
+                            legacyDecodeQueueCapacity);
+                    ownedLegacyDecodeExecutor = current;
+                }
+            }
+        }
+        return current;
     }
 
     private NativeDubboMethodInvoker<R> delegate() {

@@ -10,9 +10,11 @@ import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Result;
 import org.apache.dubbo.rpc.RpcException;
 
-import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class MinimalDubboInvoker<T> implements Invoker<T> {
@@ -75,7 +77,12 @@ public final class MinimalDubboInvoker<T> implements Invoker<T> {
                 return result;
             }
             releaseOnExit = false;
-            return result.whenCompleteWithContext((ignored, error) -> inflight.release());
+            try {
+                return result.whenCompleteWithContext((ignored, error) -> inflight.release());
+            } catch (RuntimeException | Error callbackRegistrationFailure) {
+                inflight.release();
+                throw callbackRegistrationFailure;
+            }
         } finally {
             if (releaseOnExit && inflight != null) {
                 inflight.release();
@@ -92,7 +99,7 @@ public final class MinimalDubboInvoker<T> implements Invoker<T> {
             throw new RpcException("No Dubbo provider available for " + serviceInterface.getName());
         }
         if (snapshot.length == 1 && failfastNoRetry) {
-            return snapshot[0].invoker().invoke(invocation);
+            return snapshot[0].invoke(invocation);
         }
 
         int attempts = "failover".equals(cluster) ? Math.min(retries + 1, snapshot.length) : 1;
@@ -104,7 +111,7 @@ public final class MinimalDubboInvoker<T> implements Invoker<T> {
                 continue;
             }
             try {
-                return endpoint.invoker().invoke(invocation);
+                return endpoint.invoke(invocation);
             } catch (RpcException e) {
                 last = e;
                 if (!"failover".equals(cluster)) {
@@ -130,9 +137,13 @@ public final class MinimalDubboInvoker<T> implements Invoker<T> {
     void replaceEndpoints(Endpoint<T>[] next) {
         Endpoint<T>[] previous = endpoints;
         endpoints = next == null ? emptyEndpoints() : next;
+        Set<String> retainedKeys = new HashSet<>(Math.max(1, endpoints.length * 2));
+        for (Endpoint<T> endpoint : endpoints) {
+            retainedKeys.add(endpoint.cacheKey());
+        }
         for (Endpoint<T> endpoint : previous) {
-            if (!contains(endpoints, endpoint.cacheKey())) {
-                endpoint.invoker().destroy();
+            if (!retainedKeys.contains(endpoint.cacheKey())) {
+                endpoint.retire();
             }
         }
     }
@@ -142,10 +153,6 @@ public final class MinimalDubboInvoker<T> implements Invoker<T> {
             return Math.floorMod(roundRobin.getAndIncrement(), length);
         }
         return ThreadLocalRandom.current().nextInt(length);
-    }
-
-    private static boolean contains(Endpoint<?>[] endpoints, String cacheKey) {
-        return Arrays.stream(endpoints).anyMatch(endpoint -> endpoint.cacheKey().equals(cacheKey));
     }
 
     @SuppressWarnings("unchecked")
@@ -161,5 +168,77 @@ public final class MinimalDubboInvoker<T> implements Invoker<T> {
         return value == null ? defaultValue : value;
     }
 
-    record Endpoint<T>(String cacheKey, Invoker<T> invoker) {}
+    static final class Endpoint<T> {
+
+        private final String cacheKey;
+        private final Invoker<T> invoker;
+        private final AtomicInteger activeInvocations = new AtomicInteger();
+        private final AtomicBoolean destroyed = new AtomicBoolean();
+        private volatile boolean retired;
+
+        Endpoint(String cacheKey, Invoker<T> invoker) {
+            this.cacheKey = cacheKey;
+            this.invoker = invoker;
+        }
+
+        String cacheKey() {
+            return cacheKey;
+        }
+
+        Invoker<T> invoker() {
+            return invoker;
+        }
+
+        Result invoke(Invocation invocation) {
+            if (!acquire()) {
+                throw new RpcException("Dubbo provider endpoint is no longer active: " + cacheKey);
+            }
+            boolean releaseOnExit = true;
+            try {
+                Result result = invoker.invoke(invocation);
+                releaseOnExit = false;
+                try {
+                    return result.whenCompleteWithContext((ignored, error) -> release());
+                } catch (RuntimeException | Error callbackRegistrationFailure) {
+                    release();
+                    throw callbackRegistrationFailure;
+                }
+            } finally {
+                if (releaseOnExit) {
+                    release();
+                }
+            }
+        }
+
+        private boolean acquire() {
+            if (retired) {
+                return false;
+            }
+            activeInvocations.incrementAndGet();
+            if (!retired) {
+                return true;
+            }
+            release();
+            return false;
+        }
+
+        void retire() {
+            retired = true;
+            if (activeInvocations.get() == 0) {
+                destroyOnce();
+            }
+        }
+
+        private void release() {
+            if (activeInvocations.decrementAndGet() == 0 && retired) {
+                destroyOnce();
+            }
+        }
+
+        private void destroyOnce() {
+            if (destroyed.compareAndSet(false, true)) {
+                invoker.destroy();
+            }
+        }
+    }
 }

@@ -24,6 +24,10 @@ class DubboConsumerConfigTest {
         properties.setProperty("reactor.dubbo.application-name", "orders-api");
         properties.setProperty("reactor.dubbo.registry-address", "zk.internal:2181");
         properties.setProperty("reactor.dubbo.registry-root", "/prod-dubbo/");
+        properties.setProperty("reactor.dubbo.registry-reconnect-initial-delay-ms", "400");
+        properties.setProperty("reactor.dubbo.registry-reconnect-max-delay-ms", "6400");
+        properties.setProperty("reactor.dubbo.registry-auth-scheme", "digest");
+        properties.setProperty("reactor.dubbo.registry-auth-data", "consumer:secret");
         properties.setProperty("reactor.dubbo.timeout-ms", "750");
         properties.setProperty("reactor.dubbo.retries", "0");
         properties.setProperty("reactor.dubbo.refer-thread-num", "2");
@@ -43,6 +47,10 @@ class DubboConsumerConfigTest {
         assertEquals("orders-api", config.applicationName());
         assertEquals("zookeeper://zk.internal:2181", config.registryAddress());
         assertEquals("prod-dubbo", config.registryRoot());
+        assertEquals(400, config.registryReconnectInitialDelayMs());
+        assertEquals(6400, config.registryReconnectMaxDelayMs());
+        assertEquals("digest", config.registryAuthScheme());
+        assertEquals("consumer:secret", config.registryAuthData());
         assertEquals(750, config.timeoutMs());
         assertEquals(0, config.retries());
         assertEquals(2, config.referThreadNum());
@@ -84,6 +92,25 @@ class DubboConsumerConfigTest {
                 .build();
 
         assertEquals("balanced-dubbo", config.runtimeProfile());
+    }
+
+    @Test
+    void rejectsPartialRegistryAuthenticationAndInvalidReconnectRange() {
+        assertThrows(IllegalArgumentException.class, () -> DubboConsumerConfig.builder()
+                .registryAuthScheme("digest")
+                .build());
+        assertThrows(IllegalArgumentException.class, () -> DubboConsumerConfig.builder()
+                .registryReconnectInitialDelayMs(2_000)
+                .registryReconnectMaxDelayMs(1_000)
+                .build());
+    }
+
+    @Test
+    void rejectsInvalidBooleanPropertyInsteadOfSilentlyDisablingIt() {
+        Properties properties = new Properties();
+        properties.setProperty("reactor.dubbo.registry-check", "yes");
+
+        assertThrows(IllegalArgumentException.class, () -> DubboConsumerConfig.fromProperties(properties));
     }
 
     @Test

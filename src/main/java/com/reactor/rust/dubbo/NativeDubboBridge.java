@@ -5,7 +5,9 @@ import java.util.concurrent.CompletableFuture;
 public final class NativeDubboBridge {
 
     private static final int EXPECTED_DUBBO_NATIVE_ABI_VERSION = 5;
+    private static final byte[] EMPTY_BYTES = new byte[0];
     private static final PendingNativeDubboInvocations PENDING = new PendingNativeDubboInvocations();
+    private static AsyncConfig asyncConfig;
 
     private NativeDubboBridge() {}
 
@@ -40,13 +42,26 @@ public final class NativeDubboBridge {
         return nativeUpdateProviders(clientId, providers == null ? "" : providers);
     }
 
-    public static void configureAsync(int workers, int queueCapacity) {
-        nativeConfigureAsync(workers, queueCapacity);
+    public static synchronized void configureAsync(int workers, int queueCapacity) {
+        configureAsync(workers, queueCapacity, "blocking");
     }
 
-    public static void configureAsync(int workers, int queueCapacity, String transport) {
+    public static synchronized void configureAsync(int workers, int queueCapacity, String transport) {
+        AsyncConfig requested = new AsyncConfig(
+                workers,
+                queueCapacity,
+                transport == null ? "blocking" : transport.trim().toLowerCase(java.util.Locale.ROOT));
+        if (asyncConfig != null) {
+            if (!asyncConfig.equals(requested)) {
+                throw new DubboConsumerException(
+                        "Native Dubbo async runtime is process-global and was already configured as "
+                                + asyncConfig + "; requested " + requested);
+            }
+            return;
+        }
         nativeConfigureAsync(workers, queueCapacity);
-        nativeConfigureAsyncTransport(transport == null ? "blocking" : transport);
+        nativeConfigureAsyncTransport(requested.transport());
+        asyncConfig = requested;
     }
 
     public static byte[] invoke(int clientId, byte[] requestBody, int timeoutMs) {
@@ -55,11 +70,15 @@ public final class NativeDubboBridge {
 
     public static CompletableFuture<byte[]> invokeAsync(int clientId, byte[] requestBody, int timeoutMs) {
         PendingNativeDubboInvocations.PendingCall pending = PENDING.begin(clientId);
-        boolean accepted = nativeInvokeAsync(clientId, requestBody, timeoutMs, pending.callbackId());
-        if (!accepted) {
-            PENDING.rejected(pending, "Native Dubbo async queue rejected the call");
-        } else {
-            PENDING.accepted(pending, timeoutMs);
+        try {
+            boolean accepted = nativeInvokeAsync(clientId, requestBody, timeoutMs, pending.callbackId());
+            if (!accepted) {
+                PENDING.rejected(pending, "Native Dubbo async queue rejected the call");
+            } else {
+                PENDING.accepted(pending, timeoutMs);
+            }
+        } catch (RuntimeException | LinkageError error) {
+            PENDING.rejected(pending, error);
         }
         return pending.future();
     }
@@ -83,18 +102,22 @@ public final class NativeDubboBridge {
             String methodName,
             int timeoutMs) {
         PendingNativeDubboInvocations.PendingCall pending = PENDING.begin(clientId);
-        boolean accepted = nativeInvokeByteArrayNoArgsAsync(
-                clientId,
-                serviceName,
-                group,
-                version,
-                methodName,
-                timeoutMs,
-                pending.callbackId());
-        if (!accepted) {
-            PENDING.rejected(pending, "Native Dubbo async queue rejected the call");
-        } else {
-            PENDING.accepted(pending, timeoutMs);
+        try {
+            boolean accepted = nativeInvokeByteArrayNoArgsAsync(
+                    clientId,
+                    serviceName,
+                    group,
+                    version,
+                    methodName,
+                    timeoutMs,
+                    pending.callbackId());
+            if (!accepted) {
+                PENDING.rejected(pending, "Native Dubbo async queue rejected the call");
+            } else {
+                PENDING.accepted(pending, timeoutMs);
+            }
+        } catch (RuntimeException | LinkageError error) {
+            PENDING.rejected(pending, error);
         }
         return pending.future();
     }
@@ -107,18 +130,22 @@ public final class NativeDubboBridge {
             String methodName,
             int timeoutMs) {
         PendingNativeDubboInvocations.PendingNativeResponseCall pending = PENDING.beginNativeResponse(clientId);
-        boolean accepted = nativeInvokeByteArrayNoArgsNativeJsonAsync(
-                clientId,
-                serviceName,
-                group,
-                version,
-                methodName,
-                timeoutMs,
-                pending.callbackId());
-        if (!accepted) {
-            PENDING.rejected(pending, "Native Dubbo async queue rejected the call");
-        } else {
-            PENDING.accepted(pending, timeoutMs);
+        try {
+            boolean accepted = nativeInvokeByteArrayNoArgsNativeJsonAsync(
+                    clientId,
+                    serviceName,
+                    group,
+                    version,
+                    methodName,
+                    timeoutMs,
+                    pending.callbackId());
+            if (!accepted) {
+                PENDING.rejected(pending, "Native Dubbo async queue rejected the call");
+            } else {
+                PENDING.accepted(pending, timeoutMs);
+            }
+        } catch (RuntimeException | LinkageError error) {
+            PENDING.rejected(pending, error);
         }
         return pending.future();
     }
@@ -132,19 +159,23 @@ public final class NativeDubboBridge {
             byte[] arg0,
             int timeoutMs) {
         PendingNativeDubboInvocations.PendingNativeResponseCall pending = PENDING.beginNativeResponse(clientId);
-        boolean accepted = nativeInvokeByteArrayArgNativeJsonAsync(
-                clientId,
-                serviceName,
-                group,
-                version,
-                methodName,
-                arg0 == null ? new byte[0] : arg0,
-                timeoutMs,
-                pending.callbackId());
-        if (!accepted) {
-            PENDING.rejected(pending, "Native Dubbo async queue rejected the call");
-        } else {
-            PENDING.accepted(pending, timeoutMs);
+        try {
+            boolean accepted = nativeInvokeByteArrayArgNativeJsonAsync(
+                    clientId,
+                    serviceName,
+                    group,
+                    version,
+                    methodName,
+                    arg0 == null ? EMPTY_BYTES : arg0,
+                    timeoutMs,
+                    pending.callbackId());
+            if (!accepted) {
+                PENDING.rejected(pending, "Native Dubbo async queue rejected the call");
+            } else {
+                PENDING.accepted(pending, timeoutMs);
+            }
+        } catch (RuntimeException | LinkageError error) {
+            PENDING.rejected(pending, error);
         }
         return pending.future();
     }
@@ -159,20 +190,24 @@ public final class NativeDubboBridge {
             byte[] arg1,
             int timeoutMs) {
         PendingNativeDubboInvocations.PendingNativeResponseCall pending = PENDING.beginNativeResponse(clientId);
-        boolean accepted = nativeInvokeLongByteArrayArgsNativeJsonAsync(
-                clientId,
-                serviceName,
-                group,
-                version,
-                methodName,
-                arg0,
-                arg1 == null ? new byte[0] : arg1,
-                timeoutMs,
-                pending.callbackId());
-        if (!accepted) {
-            PENDING.rejected(pending, "Native Dubbo async queue rejected the call");
-        } else {
-            PENDING.accepted(pending, timeoutMs);
+        try {
+            boolean accepted = nativeInvokeLongByteArrayArgsNativeJsonAsync(
+                    clientId,
+                    serviceName,
+                    group,
+                    version,
+                    methodName,
+                    arg0,
+                    arg1 == null ? EMPTY_BYTES : arg1,
+                    timeoutMs,
+                    pending.callbackId());
+            if (!accepted) {
+                PENDING.rejected(pending, "Native Dubbo async queue rejected the call");
+            } else {
+                PENDING.accepted(pending, timeoutMs);
+            }
+        } catch (RuntimeException | LinkageError error) {
+            PENDING.rejected(pending, error);
         }
         return pending.future();
     }
@@ -242,6 +277,12 @@ public final class NativeDubboBridge {
             return true;
         } catch (ClassNotFoundException ignored) {
             return false;
+        } catch (LinkageError error) {
+            throw new DubboConsumerException(
+                    "rust-java-rest NativeBridge was found but failed to initialize. "
+                            + "Use matching rust-java-rest, java-rust-dubbo, and native DLL/SO versions.",
+                    error
+            );
         }
     }
 
@@ -261,6 +302,20 @@ public final class NativeDubboBridge {
 
     static int pendingCountForTest() {
         return PENDING.size();
+    }
+
+    private record AsyncConfig(int workers, int queueCapacity, String transport) {
+        private AsyncConfig {
+            if (workers < 1 || workers > 256) {
+                throw new IllegalArgumentException("workers must be between 1 and 256");
+            }
+            if (queueCapacity < 1 || queueCapacity > 65_536) {
+                throw new IllegalArgumentException("queueCapacity must be between 1 and 65536");
+            }
+            if (!"blocking".equals(transport) && !"tokio-demux".equals(transport)) {
+                throw new IllegalArgumentException("transport must be blocking or tokio-demux");
+            }
+        }
     }
 
     private static native int nativeDubboAbiVersion();

@@ -16,18 +16,19 @@ public final class DirectDubboReference<T> implements AutoCloseable {
     private final MinimalDubboInvoker<T> invoker;
     private final ProviderWatcher watcher;
     private volatile T proxy;
+    private boolean closed;
 
     public DirectDubboReference(
             DubboConsumerConfig config,
             DubboReferenceSpec<T> spec,
-            Object zookeeper,
+            ZookeeperRegistryClient zookeeper,
             Executor refreshExecutor) {
         this.serviceInterface = spec.serviceInterface();
         this.invoker = new MinimalDubboInvoker<>(config, spec);
         this.watcher = new ZookeeperProviderWatcher<>(
                 config,
                 spec,
-                (ZookeeperRegistryClient) zookeeper,
+                zookeeper,
                 refreshExecutor,
                 invoker);
     }
@@ -64,9 +65,16 @@ public final class DirectDubboReference<T> implements AutoCloseable {
     }
 
     @Override
-    public void close() {
-        watcher.close();
-        invoker.destroy();
+    public synchronized void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        try {
+            watcher.close();
+        } finally {
+            invoker.destroy();
+        }
     }
 
     private static <T> T createProxy(Class<T> serviceInterface, MinimalDubboInvoker<T> invoker) {

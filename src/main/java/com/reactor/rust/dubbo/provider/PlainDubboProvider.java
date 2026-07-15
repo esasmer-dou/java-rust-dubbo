@@ -13,25 +13,19 @@ import org.apache.dubbo.rpc.protocol.PermittedSerializationKeeper;
 import org.apache.dubbo.rpc.proxy.AbstractProxyInvoker;
 
 import java.lang.management.ManagementFactory;
-import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeSet;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.Semaphore;
 
 public final class PlainDubboProvider<T> implements AutoCloseable {
 
     private static final String DEFAULT_DUBBO_VERSION = "0.0.0";
 
     private final Exporter<T> exporter;
-    private final AutoCloseable registration;
-
-    private PlainDubboProvider(Exporter<T> exporter, AutoCloseable registration) {
+    private PlainDubboProvider(Exporter<T> exporter) {
         this.exporter = exporter;
-        this.registration = registration;
     }
 
     public static <T> PlainDubboProvider<T> export(
@@ -67,10 +61,32 @@ public final class PlainDubboProvider<T> implements AutoCloseable {
             DubboProviderRegistration sharedRegistration,
             ServiceExecutionConfig executionConfig
     ) throws Exception {
+        return export(
+                serviceType,
+                service,
+                config,
+                sharedRegistration,
+                executionConfig,
+                MethodHandleProviderDispatcher.create(serviceType, service));
+    }
+
+    public static <T> PlainDubboProvider<T> export(
+            Class<T> serviceType,
+            T service,
+            ProviderConfig config,
+            DubboProviderRegistration sharedRegistration,
+            ServiceExecutionConfig executionConfig,
+            ProviderMethodDispatcher<T> dispatcher
+    ) throws Exception {
         URL exportUrl = providerUrl(serviceType, config, executionConfig);
         registerServiceModel(serviceType, service, exportUrl);
         registerPermittedSerialization(exportUrl);
-        Invoker<T> invoker = new ReflectiveInvoker<>(service, serviceType, exportUrl, executionConfig);
+        Invoker<T> invoker = new DispatchingInvoker<>(
+                service,
+                serviceType,
+                exportUrl,
+                executionConfig,
+                Objects.requireNonNull(dispatcher, "dispatcher"));
 
         ExtensionLoader<Protocol> loader = DubboRuntimeModel.module().getExtensionLoader(Protocol.class);
         Protocol protocol = loader.getExtension("dubbo", false);
@@ -80,7 +96,7 @@ public final class PlainDubboProvider<T> implements AutoCloseable {
             if (sharedRegistration != null) {
                 sharedRegistration.register(serviceType, exportUrl);
             }
-            return new PlainDubboProvider<>(exporter, null);
+            return new PlainDubboProvider<>(exporter);
         } catch (Exception e) {
             exporter.unexport();
             throw e;
@@ -93,15 +109,7 @@ public final class PlainDubboProvider<T> implements AutoCloseable {
 
     @Override
     public void close() {
-        try {
-            if (registration != null) {
-                registration.close();
-            }
-        } catch (Exception ignored) {
-            // Session close removes ephemeral registry nodes; explicit cleanup is best effort.
-        } finally {
-            exporter.unexport();
-        }
+        exporter.unexport();
     }
 
     private static <T> URL providerUrl(
@@ -178,103 +186,31 @@ public final class PlainDubboProvider<T> implements AutoCloseable {
         return String.join(",", entries);
     }
 
-    private static final class ReflectiveInvoker<T> extends AbstractProxyInvoker<T> {
+    private static final class DispatchingInvoker<T> extends AbstractProxyInvoker<T> {
 
-        private final ServiceConcurrencyGate concurrencyGate;
+        private final ProviderConcurrencyGate concurrencyGate;
+        private final ProviderMethodDispatcher<T> dispatcher;
 
-        private ReflectiveInvoker(T proxy, Class<T> type, URL url, ServiceExecutionConfig executionConfig) {
+        private DispatchingInvoker(
+                T proxy,
+                Class<T> type,
+                URL url,
+                ServiceExecutionConfig executionConfig,
+                ProviderMethodDispatcher<T> dispatcher) {
             super(proxy, type, url);
-            this.concurrencyGate = ServiceConcurrencyGate.forService(type, executionConfig);
+            this.concurrencyGate = ProviderConcurrencyGate.forService(type, executionConfig);
+            this.dispatcher = dispatcher;
         }
 
         @Override
         protected Object doInvoke(T proxy, String methodName, Class<?>[] parameterTypes, Object[] arguments)
                 throws Throwable {
-            InvocationPermit permit = concurrencyGate.acquireOrReject(methodName);
+            ProviderConcurrencyGate.MethodGate methodGate = concurrencyGate.acquireOrReject(methodName);
             try {
-                Method method = proxy.getClass().getMethod(methodName, parameterTypes);
-                return method.invoke(proxy, arguments);
-            } catch (InvocationTargetException e) {
-                throw e.getTargetException();
+                return dispatcher.invoke(proxy, methodName, parameterTypes, arguments);
             } finally {
-                permit.release();
+                concurrencyGate.release(methodGate);
             }
-        }
-    }
-
-    private static final class ServiceConcurrencyGate {
-
-        private final String serviceName;
-        private final int maxConcurrentInvocations;
-        private final Semaphore serviceSemaphore;
-        private final Map<String, MethodGate> methodGates;
-
-        private ServiceConcurrencyGate(Class<?> serviceType, ServiceExecutionConfig executionConfig) {
-            this.serviceName = serviceType.getName();
-            this.maxConcurrentInvocations = executionConfig.maxConcurrentInvocations();
-            this.serviceSemaphore = executionConfig.isBounded()
-                    ? new Semaphore(executionConfig.maxConcurrentInvocations(), false)
-                    : null;
-            this.methodGates = methodGates(executionConfig.methodMaxConcurrentInvocations());
-        }
-
-        static ServiceConcurrencyGate forService(Class<?> serviceType, ServiceExecutionConfig executionConfig) {
-            return new ServiceConcurrencyGate(serviceType, executionConfig);
-        }
-
-        InvocationPermit acquireOrReject(String methodName) {
-            MethodGate methodGate = methodGates.get(methodName);
-            if (methodGate != null) {
-                return methodGate.acquireOrReject(serviceName, methodName);
-            }
-            if (serviceSemaphore == null) {
-                return InvocationPermit.NOOP;
-            }
-            if (!serviceSemaphore.tryAcquire()) {
-                throw new RejectedExecutionException("Dubbo provider concurrency limit exceeded for "
-                        + serviceName + "." + methodName
-                        + " maxConcurrent=" + maxConcurrentInvocations);
-            }
-            return serviceSemaphore::release;
-        }
-
-        private static Map<String, MethodGate> methodGates(Map<String, Integer> methodLimits) {
-            if (methodLimits.isEmpty()) {
-                return Map.of();
-            }
-            Map<String, MethodGate> gates = new LinkedHashMap<>(methodLimits.size());
-            for (Map.Entry<String, Integer> entry : methodLimits.entrySet()) {
-                gates.put(entry.getKey(), new MethodGate(entry.getValue()));
-            }
-            return Collections.unmodifiableMap(gates);
-        }
-    }
-
-    @FunctionalInterface
-    private interface InvocationPermit {
-
-        InvocationPermit NOOP = () -> {};
-
-        void release();
-    }
-
-    private static final class MethodGate {
-
-        private final int maxConcurrentInvocations;
-        private final Semaphore semaphore;
-
-        private MethodGate(int maxConcurrentInvocations) {
-            this.maxConcurrentInvocations = maxConcurrentInvocations;
-            this.semaphore = new Semaphore(maxConcurrentInvocations, false);
-        }
-
-        InvocationPermit acquireOrReject(String serviceName, String methodName) {
-            if (!semaphore.tryAcquire()) {
-                throw new RejectedExecutionException("Dubbo provider method concurrency limit exceeded for "
-                        + serviceName + "." + methodName
-                        + " maxConcurrent=" + maxConcurrentInvocations);
-            }
-            return semaphore::release;
         }
     }
 

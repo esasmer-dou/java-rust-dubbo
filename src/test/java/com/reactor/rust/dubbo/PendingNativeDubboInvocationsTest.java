@@ -35,6 +35,19 @@ class PendingNativeDubboInvocationsTest {
     }
 
     @Test
+    void rejectedWithOriginalFailureRemovesPendingAndPreservesCause() {
+        PendingNativeDubboInvocations pending = new PendingNativeDubboInvocations();
+        PendingNativeDubboInvocations.PendingCall call = pending.begin(7);
+        IllegalStateException failure = new IllegalStateException("native submission failed");
+
+        pending.rejected(call, failure);
+
+        ExecutionException error = assertThrows(ExecutionException.class, () -> call.future().get());
+        assertEquals(failure, error.getCause());
+        assertEquals(0, pending.size());
+    }
+
+    @Test
     void completeNativeResponseRemovesPendingAndCompletesFuture() throws Exception {
         PendingNativeDubboInvocations pending = new PendingNativeDubboInvocations();
         PendingNativeDubboInvocations.PendingNativeResponseCall call = pending.beginNativeResponse(7);

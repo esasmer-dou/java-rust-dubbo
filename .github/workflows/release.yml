@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version, for example 0.1.0"
+        description: "Release version, for example 0.3.0"
         required: true
         type: string
 
@@ -50,6 +50,13 @@ jobs:
       - name: Test
         run: mvn -B test
 
+      - name: Verify release version
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          PROJECT_VERSION="$(mvn -q help:evaluate -Dexpression=project.version -DforceStdout)"
+          test "$VERSION" = "$PROJECT_VERSION"
+
       - name: Publish Maven package
         run: mvn -B -DskipTests deploy
 
@@ -67,6 +74,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: v${{ steps.version.outputs.version }}
+          tag_name: v${{ steps.version.outputs.version }}
           body_path: docs/RELEASE_NOTES_v${{ steps.version.outputs.version }}.md
           prerelease: ${{ contains(steps.version.outputs.version, '-') }}
           files: release-assets/*

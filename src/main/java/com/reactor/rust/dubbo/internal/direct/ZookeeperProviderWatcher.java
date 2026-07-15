@@ -7,6 +7,7 @@ import com.reactor.rust.dubbo.internal.registry.DubboUrlFactory;
 import com.reactor.rust.dubbo.internal.registry.ProviderWatcher;
 import com.reactor.rust.dubbo.internal.registry.ZookeeperRegistryClient;
 import com.reactor.rust.dubbo.internal.runtime.DubboRuntimeModel;
+import com.reactor.rust.dubbo.internal.util.CoalescingTask;
 
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.extension.ExtensionLoader;
@@ -20,18 +21,19 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 
 final class ZookeeperProviderWatcher<T> implements ProviderWatcher {
 
     private final DubboConsumerConfig config;
     private final DubboReferenceSpec<T> spec;
     private final ZookeeperRegistryClient zookeeper;
-    private final Executor refreshExecutor;
     private final MinimalDubboInvoker<T> invoker;
     private final Protocol protocol;
     private final String providerPath;
     private final Watcher watcher = this::onWatchedEvent;
-    private final Runnable reconnectRefresh = this::refreshSync;
+    private final CoalescingTask refreshTask;
+    private final Runnable reconnectRefresh;
     private volatile Map<String, MinimalDubboInvoker.Endpoint<T>> endpointsByKey = Map.of();
     private volatile boolean closed;
 
@@ -44,16 +46,25 @@ final class ZookeeperProviderWatcher<T> implements ProviderWatcher {
         this.config = config;
         this.spec = spec;
         this.zookeeper = zookeeper;
-        this.refreshExecutor = refreshExecutor;
         this.invoker = invoker;
         this.providerPath = DubboUrlFactory.providerPath(config, spec);
+        this.refreshTask = new CoalescingTask(refreshExecutor, this::refreshSync);
+        this.reconnectRefresh = refreshTask::request;
         ExtensionLoader<Protocol> loader = DubboRuntimeModel.module().getExtensionLoader(Protocol.class);
         this.protocol = loader.getExtension(config.protocol(), false);
     }
 
     public void start() {
         zookeeper.registerRefresh(reconnectRefresh);
-        refreshSync();
+        try {
+            refreshSync();
+        } catch (RuntimeException | LinkageError failure) {
+            closed = true;
+            zookeeper.unregisterRefresh(reconnectRefresh);
+            invoker.replaceEndpoints(emptyEndpoints());
+            endpointsByKey = Map.of();
+            throw failure;
+        }
     }
 
     @Override
@@ -72,7 +83,7 @@ final class ZookeeperProviderWatcher<T> implements ProviderWatcher {
         if (type == Watcher.Event.EventType.NodeChildrenChanged
                 || type == Watcher.Event.EventType.NodeCreated
                 || type == Watcher.Event.EventType.NodeDeleted) {
-            refreshExecutor.execute(this::refreshSync);
+            requestRefresh();
         }
     }
 
@@ -83,16 +94,26 @@ final class ZookeeperProviderWatcher<T> implements ProviderWatcher {
         try {
             List<String> children = readChildrenAndInstallWatcher();
             Map<String, MinimalDubboInvoker.Endpoint<T>> next = buildEndpoints(children);
+            endpointsByKey = next;
+            invoker.replaceEndpoints(toArray(next));
             if (config.check() && next.isEmpty()) {
                 throw new DubboConsumerException("No Dubbo provider available for "
                         + spec.serviceInterface().getName() + " from " + providerPath);
             }
-            endpointsByKey = next;
-            invoker.replaceEndpoints(toArray(next));
         } catch (Exception e) {
             if (config.check()) {
                 throw new DubboConsumerException("Failed to refresh Dubbo providers for "
                         + spec.serviceInterface().getName() + " from " + providerPath, e);
+            }
+        }
+    }
+
+    private void requestRefresh() {
+        try {
+            refreshTask.request();
+        } catch (RejectedExecutionException rejected) {
+            if (!closed) {
+                throw rejected;
             }
         }
     }

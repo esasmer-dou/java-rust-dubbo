@@ -26,6 +26,10 @@ public final class DubboConsumerConfig {
     private final String providers;
     private final int registryTimeoutMs;
     private final int registrySessionTimeoutMs;
+    private final int registryReconnectInitialDelayMs;
+    private final int registryReconnectMaxDelayMs;
+    private final String registryAuthScheme;
+    private final String registryAuthData;
     private final boolean registryCheck;
     private final String protocol;
     private final String serialization;
@@ -55,6 +59,22 @@ public final class DubboConsumerConfig {
         this.providers = normalizeProviders(builder.providers);
         this.registryTimeoutMs = requirePositive(builder.registryTimeoutMs, "registryTimeoutMs");
         this.registrySessionTimeoutMs = requirePositive(builder.registrySessionTimeoutMs, "registrySessionTimeoutMs");
+        this.registryReconnectInitialDelayMs = requirePositive(
+                builder.registryReconnectInitialDelayMs,
+                "registryReconnectInitialDelayMs");
+        this.registryReconnectMaxDelayMs = requirePositive(
+                builder.registryReconnectMaxDelayMs,
+                "registryReconnectMaxDelayMs");
+        if (registryReconnectMaxDelayMs < registryReconnectInitialDelayMs) {
+            throw new IllegalArgumentException(
+                    "registryReconnectMaxDelayMs must be >= registryReconnectInitialDelayMs");
+        }
+        this.registryAuthScheme = normalizeOptional(builder.registryAuthScheme);
+        this.registryAuthData = normalizeOptional(builder.registryAuthData);
+        if (registryAuthScheme.isEmpty() != registryAuthData.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "registryAuthScheme and registryAuthData must either both be set or both be blank");
+        }
         this.registryCheck = builder.registryCheck;
         this.protocol = requireText(builder.protocol, "protocol");
         this.serialization = requireText(builder.serialization, "serialization");
@@ -103,6 +123,19 @@ public final class DubboConsumerConfig {
         builder.providers(readString(properties, "providers", builder.providers));
         builder.registryTimeoutMs(readInt(properties, "registry-timeout-ms", builder.registryTimeoutMs));
         builder.registrySessionTimeoutMs(readInt(properties, "registry-session-timeout-ms", builder.registrySessionTimeoutMs));
+        builder.registryReconnectInitialDelayMs(readInt(
+                properties,
+                "registry-reconnect-initial-delay-ms",
+                builder.registryReconnectInitialDelayMs));
+        builder.registryReconnectMaxDelayMs(readInt(
+                properties,
+                "registry-reconnect-max-delay-ms",
+                builder.registryReconnectMaxDelayMs));
+        builder.registryAuthScheme(readString(
+                properties,
+                "registry-auth-scheme",
+                builder.registryAuthScheme));
+        builder.registryAuthData(readString(properties, "registry-auth-data", builder.registryAuthData));
         builder.registryCheck(readBoolean(properties, "registry-check", builder.registryCheck));
         builder.protocol(readString(properties, "protocol", builder.protocol));
         builder.serialization(readString(properties, "serialization", builder.serialization));
@@ -156,6 +189,26 @@ public final class DubboConsumerConfig {
 
     public int registrySessionTimeoutMs() {
         return registrySessionTimeoutMs;
+    }
+
+    public int registryReconnectInitialDelayMs() {
+        return registryReconnectInitialDelayMs;
+    }
+
+    public int registryReconnectMaxDelayMs() {
+        return registryReconnectMaxDelayMs;
+    }
+
+    public String registryAuthScheme() {
+        return registryAuthScheme;
+    }
+
+    public String registryAuthData() {
+        return registryAuthData;
+    }
+
+    public boolean registryAuthenticationEnabled() {
+        return !registryAuthScheme.isEmpty();
     }
 
     public boolean registryCheck() {
@@ -331,7 +384,14 @@ public final class DubboConsumerConfig {
         if (isBlank(value)) {
             return defaultValue;
         }
-        return Boolean.parseBoolean(value.trim());
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        if ("true".equals(normalized)) {
+            return true;
+        }
+        if ("false".equals(normalized)) {
+            return false;
+        }
+        throw new IllegalArgumentException(PROPERTY_PREFIX + key + " must be true or false: " + value);
     }
 
     private static String readRaw(Properties properties, String key) {
@@ -368,6 +428,10 @@ public final class DubboConsumerConfig {
         return value.trim();
     }
 
+    private static String normalizeOptional(String value) {
+        return value == null ? "" : value.trim();
+    }
+
     private static boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
     }
@@ -379,6 +443,10 @@ public final class DubboConsumerConfig {
         private String providers = "";
         private int registryTimeoutMs = 3_000;
         private int registrySessionTimeoutMs = 30_000;
+        private int registryReconnectInitialDelayMs = 250;
+        private int registryReconnectMaxDelayMs = 10_000;
+        private String registryAuthScheme = "";
+        private String registryAuthData = "";
         private boolean registryCheck;
         private String protocol = DEFAULT_PROTOCOL;
         private String serialization = DEFAULT_SERIALIZATION;
@@ -430,6 +498,26 @@ public final class DubboConsumerConfig {
 
         public Builder registrySessionTimeoutMs(int registrySessionTimeoutMs) {
             this.registrySessionTimeoutMs = registrySessionTimeoutMs;
+            return this;
+        }
+
+        public Builder registryReconnectInitialDelayMs(int registryReconnectInitialDelayMs) {
+            this.registryReconnectInitialDelayMs = registryReconnectInitialDelayMs;
+            return this;
+        }
+
+        public Builder registryReconnectMaxDelayMs(int registryReconnectMaxDelayMs) {
+            this.registryReconnectMaxDelayMs = registryReconnectMaxDelayMs;
+            return this;
+        }
+
+        public Builder registryAuthScheme(String registryAuthScheme) {
+            this.registryAuthScheme = registryAuthScheme;
+            return this;
+        }
+
+        public Builder registryAuthData(String registryAuthData) {
+            this.registryAuthData = registryAuthData;
             return this;
         }
 

@@ -38,6 +38,27 @@ public final class DubboProviderSupport {
         );
     }
 
+    public DubboProviderRegistration providerRegistration(boolean registryEnabled) throws Exception {
+        if (!registryEnabled) {
+            return DubboProviderRegistration.disabled();
+        }
+        PlainDubboProvider.ProviderConfig provider = providerConfig(true);
+        ZookeeperDubboProviderRegistration.RegistryConfig registry =
+                new ZookeeperDubboProviderRegistration.RegistryConfig(
+                        provider.registryAddress(),
+                        provider.registryRoot(),
+                        provider.applicationName(),
+                        getIntOrDefault("reactor.dubbo.registry-timeout-ms", 5_000),
+                        getIntOrDefault("reactor.dubbo.registry-session-timeout-ms", 30_000),
+                        getIntOrDefault("reactor.dubbo.registry-reconnect-initial-delay-ms", 250),
+                        getIntOrDefault("reactor.dubbo.registry-reconnect-max-delay-ms", 10_000),
+                        getOrDefault("reactor.dubbo.registry-auth-scheme", ""),
+                        getOrDefault("reactor.dubbo.registry-auth-data", ""),
+                        ZookeeperDubboProviderRegistration.AclMode.parse(
+                                getOrDefault("reactor.dubbo.registry-acl", "auto")));
+        return ZookeeperDubboProviderRegistration.open(registry);
+    }
+
     public <T> ServicePlan<T> service(Class<T> serviceType, T implementation) {
         return new ServicePlan<>(serviceType, implementation, serviceExecutionConfig(serviceType));
     }

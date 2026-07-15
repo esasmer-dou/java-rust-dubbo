@@ -3,19 +3,17 @@ package com.reactor.rust.dubbo;
 import com.reactor.rust.dubbo.internal.direct.DirectDubboReference;
 import com.reactor.rust.dubbo.internal.registry.ZookeeperRegistryClient;
 import com.reactor.rust.dubbo.internal.runtime.DubboRuntimeTuning;
-import com.reactor.rust.dubbo.internal.util.NamedDaemonThreadFactory;
+import com.reactor.rust.dubbo.internal.util.RegistryExecutors;
 
 import java.util.Objects;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 public final class DubboConsumerClient implements AutoCloseable {
 
     private final DubboConsumerConfig config;
-    private final Object zookeeper;
-    private final ThreadPoolExecutor refreshExecutor;
+    private final ZookeeperRegistryClient zookeeper;
+    private final ScheduledThreadPoolExecutor refreshExecutor;
     private final ConcurrentHashMap<ReferenceKey, DirectDubboReference<?>> references = new ConcurrentHashMap<>();
     private final DubboConsumerMetrics metrics = new DubboConsumerMetrics();
     private volatile boolean closed;
@@ -23,9 +21,22 @@ public final class DubboConsumerClient implements AutoCloseable {
     private DubboConsumerClient(DubboConsumerConfig config) {
         this.config = Objects.requireNonNull(config, "config");
         DubboRuntimeTuning.apply(this.config);
-        this.refreshExecutor = createRefreshExecutor(config);
-        this.zookeeper = new ZookeeperRegistryClient(config, refreshExecutor);
-        ((ZookeeperRegistryClient) this.zookeeper).start();
+        ScheduledThreadPoolExecutor executor = createRefreshExecutor(config);
+        ZookeeperRegistryClient registry = new ZookeeperRegistryClient(config, executor);
+        try {
+            registry.start();
+        } catch (RuntimeException | LinkageError startupFailure) {
+            try {
+                registry.close();
+            } catch (RuntimeException | LinkageError closeFailure) {
+                startupFailure.addSuppressed(closeFailure);
+            } finally {
+                executor.shutdownNow();
+            }
+            throw startupFailure;
+        }
+        this.refreshExecutor = executor;
+        this.zookeeper = registry;
     }
 
     public static DubboConsumerClient create(DubboConsumerConfig config) {
@@ -80,16 +91,29 @@ public final class DubboConsumerClient implements AutoCloseable {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         if (closed) {
             return;
         }
         closed = true;
-        references.forEach((ignored, reference) -> reference.close());
+        Throwable failure = null;
+        for (DirectDubboReference<?> reference : references.values()) {
+            try {
+                reference.close();
+            } catch (RuntimeException | LinkageError closeFailure) {
+                failure = CloseFailures.add(failure, closeFailure);
+            }
+        }
         references.clear();
-        refreshExecutor.shutdownNow();
-        ((ZookeeperRegistryClient) zookeeper).close();
-        metrics.recordClose();
+        try {
+            zookeeper.close();
+        } catch (RuntimeException | LinkageError closeFailure) {
+            failure = CloseFailures.add(failure, closeFailure);
+        } finally {
+            refreshExecutor.shutdownNow();
+            metrics.recordClose();
+        }
+        CloseFailures.rethrow(failure, "Failed to close Dubbo consumer resources");
     }
 
     void recordFieldInjected() {
@@ -99,9 +123,14 @@ public final class DubboConsumerClient implements AutoCloseable {
     private <T> DirectDubboReference<T> createReference(DubboReferenceSpec<T> spec) {
         try {
             DirectDubboReference<T> reference = new DirectDubboReference<>(config, spec, zookeeper, refreshExecutor);
-            reference.start();
-            metrics.recordReferenceCreated();
-            return reference;
+            try {
+                reference.start();
+                metrics.recordReferenceCreated();
+                return reference;
+            } catch (RuntimeException | LinkageError failure) {
+                closeAfterFailedStart(reference, failure);
+                throw failure;
+            }
         } catch (RuntimeException e) {
             metrics.recordReferenceCreateFailure();
             throw new DubboConsumerException("Failed to create Dubbo consumer reference for "
@@ -109,8 +138,19 @@ public final class DubboConsumerClient implements AutoCloseable {
         }
     }
 
+    private static void closeAfterFailedStart(
+            DirectDubboReference<?> reference,
+            Throwable startupFailure) {
+        try {
+            reference.close();
+        } catch (RuntimeException | LinkageError closeFailure) {
+            startupFailure.addSuppressed(closeFailure);
+        }
+    }
+
     @SuppressWarnings("unchecked")
-    private <T> DirectDubboReference<T> reference(DubboReferenceSpec<T> spec) {
+    private synchronized <T> DirectDubboReference<T> reference(DubboReferenceSpec<T> spec) {
+        ensureOpen();
         ReferenceKey key = ReferenceKey.from(spec, config);
         return (DirectDubboReference<T>) references.computeIfAbsent(key, ignored -> createReference(spec));
     }
@@ -121,19 +161,8 @@ public final class DubboConsumerClient implements AutoCloseable {
         }
     }
 
-    private static ThreadPoolExecutor createRefreshExecutor(DubboConsumerConfig config) {
-        int threads = Math.max(1, config.referThreadNum());
-        int queueCapacity = DubboConsumerConfig.RUNTIME_PROFILE_MICRO_DUBBO.equals(config.runtimeProfile()) ? 8 : 64;
-        ThreadPoolExecutor executor = new ThreadPoolExecutor(
-                threads,
-                threads,
-                30L,
-                TimeUnit.SECONDS,
-                new ArrayBlockingQueue<>(queueCapacity),
-                new NamedDaemonThreadFactory("reactor-dubbo-zk-refresh"),
-                new ThreadPoolExecutor.CallerRunsPolicy());
-        executor.allowCoreThreadTimeOut(true);
-        return executor;
+    private static ScheduledThreadPoolExecutor createRefreshExecutor(DubboConsumerConfig config) {
+        return RegistryExecutors.create(config, "reactor-dubbo-zk-refresh");
     }
 
     private record ReferenceKey(

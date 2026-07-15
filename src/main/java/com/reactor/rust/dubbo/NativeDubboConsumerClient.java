@@ -2,24 +2,24 @@ package com.reactor.rust.dubbo;
 
 import com.reactor.rust.dubbo.internal.nativeclient.NativeDubboReferenceHandle;
 import com.reactor.rust.dubbo.internal.nativeclient.StaticNativeDubboReference;
+import com.reactor.rust.dubbo.internal.nativeclient.LegacyDecodeExecutor;
 import com.reactor.rust.dubbo.internal.runtime.DubboRuntimeTuning;
+import com.reactor.rust.dubbo.internal.util.RegistryExecutors;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Objects;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 public final class NativeDubboConsumerClient implements AutoCloseable {
 
     private final DubboConsumerConfig config;
     private final AutoCloseable zookeeper;
-    private final ThreadPoolExecutor refreshExecutor;
+    private final ScheduledThreadPoolExecutor refreshExecutor;
+    private final LegacyDecodeExecutor legacyDecodeExecutor;
     private final ConcurrentHashMap<ReferenceKey, NativeDubboReferenceHandle<?>> references = new ConcurrentHashMap<>();
     private volatile boolean nativeAsyncConfigured;
     private volatile boolean closed;
@@ -27,12 +27,22 @@ public final class NativeDubboConsumerClient implements AutoCloseable {
     private NativeDubboConsumerClient(DubboConsumerConfig config) {
         this.config = Objects.requireNonNull(config, "config");
         DubboRuntimeTuning.apply(this.config);
+        this.legacyDecodeExecutor = LegacyDecodeExecutor.forConfig(this.config);
         if (config.staticProvidersEnabled()) {
             this.refreshExecutor = null;
             this.zookeeper = null;
         } else {
-            this.refreshExecutor = createRefreshExecutor(config);
-            this.zookeeper = DiscoverySupport.openRegistry(config, refreshExecutor);
+            ScheduledThreadPoolExecutor executor = createRefreshExecutor(config);
+            AutoCloseable registry;
+            try {
+                registry = DiscoverySupport.openRegistry(config, executor);
+            } catch (RuntimeException | LinkageError startupFailure) {
+                executor.shutdownNow();
+                legacyDecodeExecutor.close();
+                throw startupFailure;
+            }
+            this.refreshExecutor = executor;
+            this.zookeeper = registry;
         }
     }
 
@@ -78,41 +88,70 @@ public final class NativeDubboConsumerClient implements AutoCloseable {
     }
 
     @Override
-    public void close() {
+    public synchronized void close() {
         if (closed) {
             return;
         }
         closed = true;
-        references.forEach((ignored, reference) -> reference.close());
-        references.clear();
-        if (refreshExecutor != null) {
-            refreshExecutor.shutdownNow();
+        Throwable failure = null;
+        for (NativeDubboReferenceHandle<?> reference : references.values()) {
+            try {
+                reference.close();
+            } catch (RuntimeException | LinkageError closeFailure) {
+                failure = CloseFailures.add(failure, closeFailure);
+            }
         }
+        references.clear();
         if (zookeeper != null) {
             try {
                 zookeeper.close();
             } catch (Exception e) {
-                throw new DubboConsumerException("Failed to close native Dubbo registry client", e);
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
+                failure = CloseFailures.add(failure, e);
             }
         }
+        if (refreshExecutor != null) {
+            refreshExecutor.shutdownNow();
+        }
+        legacyDecodeExecutor.close();
+        CloseFailures.rethrow(failure, "Failed to close native Dubbo consumer resources");
     }
 
     private <T> NativeDubboReferenceHandle<T> createReference(DubboReferenceSpec<T> spec) {
         try {
             configureNativeAsyncOnce();
             NativeDubboReferenceHandle<T> reference = config.staticProvidersEnabled()
-                    ? new StaticNativeDubboReference<>(config, spec)
-                    : DiscoverySupport.createReference(config, spec, zookeeper, refreshExecutor);
-            reference.start();
-            return reference;
+                    ? new StaticNativeDubboReference<>(config, spec, legacyDecodeExecutor)
+                    : DiscoverySupport.createReference(
+                            config, spec, zookeeper, refreshExecutor, legacyDecodeExecutor);
+            try {
+                reference.start();
+                return reference;
+            } catch (RuntimeException | LinkageError failure) {
+                closeAfterFailedStart(reference, failure);
+                throw failure;
+            }
         } catch (RuntimeException e) {
             throw new DubboConsumerException("Failed to create native Dubbo consumer reference for "
                     + spec.serviceInterface().getName(), e);
         }
     }
 
+    private static void closeAfterFailedStart(
+            NativeDubboReferenceHandle<?> reference,
+            Throwable startupFailure) {
+        try {
+            reference.close();
+        } catch (RuntimeException | LinkageError closeFailure) {
+            startupFailure.addSuppressed(closeFailure);
+        }
+    }
+
     @SuppressWarnings("unchecked")
-    private <T> NativeDubboReferenceHandle<T> reference(DubboReferenceSpec<T> spec) {
+    private synchronized <T> NativeDubboReferenceHandle<T> reference(DubboReferenceSpec<T> spec) {
+        ensureOpen();
         ReferenceKey key = ReferenceKey.from(spec, config);
         return (NativeDubboReferenceHandle<T>) references.computeIfAbsent(key, ignored -> createReference(spec));
     }
@@ -143,28 +182,8 @@ public final class NativeDubboConsumerClient implements AutoCloseable {
         }
     }
 
-    private static ThreadPoolExecutor createRefreshExecutor(DubboConsumerConfig config) {
-        int threads = Math.max(1, config.referThreadNum());
-        int queueCapacity = DubboConsumerConfig.RUNTIME_PROFILE_MICRO_DUBBO.equals(config.runtimeProfile()) ? 8 : 64;
-        ThreadPoolExecutor executor = new ThreadPoolExecutor(
-                threads,
-                threads,
-                30L,
-                TimeUnit.SECONDS,
-                new ArrayBlockingQueue<>(queueCapacity),
-                daemonThreadFactory("reactor-native-dubbo-zk-refresh"),
-                new ThreadPoolExecutor.CallerRunsPolicy());
-        executor.allowCoreThreadTimeOut(true);
-        return executor;
-    }
-
-    private static ThreadFactory daemonThreadFactory(String prefix) {
-        AtomicInteger sequence = new AtomicInteger(1);
-        return task -> {
-            Thread thread = new Thread(task, prefix + "-" + sequence.getAndIncrement());
-            thread.setDaemon(true);
-            return thread;
-        };
+    private static ScheduledThreadPoolExecutor createRefreshExecutor(DubboConsumerConfig config) {
+        return RegistryExecutors.create(config, "reactor-native-dubbo-zk-refresh");
     }
 
     private record ReferenceKey(
@@ -211,10 +230,12 @@ public final class NativeDubboConsumerClient implements AutoCloseable {
         private DiscoverySupport() {
         }
 
-        private static AutoCloseable openRegistry(DubboConsumerConfig config, Executor refreshExecutor) {
+        private static AutoCloseable openRegistry(
+                DubboConsumerConfig config,
+                ScheduledExecutorService refreshExecutor) {
             try {
                 Method method = Class.forName(FACTORY_CLASS)
-                        .getMethod(OPEN_REGISTRY, DubboConsumerConfig.class, Executor.class);
+                        .getMethod(OPEN_REGISTRY, DubboConsumerConfig.class, ScheduledExecutorService.class);
                 return (AutoCloseable) method.invoke(null, config, refreshExecutor);
             } catch (ClassNotFoundException e) {
                 throw new DubboConsumerException("ZooKeeper discovery requires optional ZooKeeper classes. "
@@ -235,7 +256,8 @@ public final class NativeDubboConsumerClient implements AutoCloseable {
                 DubboConsumerConfig config,
                 DubboReferenceSpec<T> spec,
                 AutoCloseable zookeeper,
-                Executor refreshExecutor
+                Executor refreshExecutor,
+                Executor legacyDecodeExecutor
         ) {
             try {
                 Method method = Class.forName(FACTORY_CLASS)
@@ -243,8 +265,10 @@ public final class NativeDubboConsumerClient implements AutoCloseable {
                                 DubboConsumerConfig.class,
                                 DubboReferenceSpec.class,
                                 AutoCloseable.class,
+                                Executor.class,
                                 Executor.class);
-                return (NativeDubboReferenceHandle<T>) method.invoke(null, config, spec, zookeeper, refreshExecutor);
+                return (NativeDubboReferenceHandle<T>) method.invoke(
+                        null, config, spec, zookeeper, refreshExecutor, legacyDecodeExecutor);
             } catch (ClassNotFoundException e) {
                 throw new DubboConsumerException("ZooKeeper discovery requires optional ZooKeeper classes. "
                         + "Use reactor.dubbo.providers for static-provider micro-dubbo mode or add ZooKeeper dependencies.", e);

@@ -6,7 +6,7 @@
 
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.2.3</version>
+  <version>0.3.0</version>
   <packaging>jar</packaging>
 
   <name>java-rust-dubbo</name>
@@ -240,6 +240,7 @@
                 <include>com/reactor/rust/dubbo/DubboConsumerConfig*.class</include>
                 <include>com/reactor/rust/dubbo/DubboConsumerException*.class</include>
                 <include>com/reactor/rust/dubbo/DubboConsumerMetrics*.class</include>
+                <include>com/reactor/rust/dubbo/CloseFailures*.class</include>
                 <include>com/reactor/rust/dubbo/DubboReference.class</include>
                 <include>com/reactor/rust/dubbo/DubboReferenceSpec*.class</include>
                 <include>com/reactor/rust/dubbo/NativeDubboBridge*.class</include>
@@ -249,6 +250,7 @@
                 <include>com/reactor/rust/dubbo/NativeResponseHandle*.class</include>
                 <include>com/reactor/rust/dubbo/PendingNativeDubboInvocations*.class</include>
                 <include>com/reactor/rust/dubbo/internal/nativeclient/LegacyCodecSupport*.class</include>
+                <include>com/reactor/rust/dubbo/internal/nativeclient/LegacyDecodeExecutor*.class</include>
                 <include>com/reactor/rust/dubbo/internal/nativeclient/NativeDubboDescriptor*.class</include>
                 <include>com/reactor/rust/dubbo/internal/nativeclient/NativeDubboReferenceHandle*.class</include>
                 <include>com/reactor/rust/dubbo/internal/nativeclient/StaticNativeDubboReference*.class</include>

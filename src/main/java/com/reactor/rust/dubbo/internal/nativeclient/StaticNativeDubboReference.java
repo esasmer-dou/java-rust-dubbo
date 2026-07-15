@@ -11,6 +11,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 
 public final class StaticNativeDubboReference<T> implements NativeDubboReferenceHandle<T> {
 
@@ -21,12 +22,18 @@ public final class StaticNativeDubboReference<T> implements NativeDubboReference
     private final Class<T> serviceInterface;
     private final int nativeClientId;
     private final String staticProviders;
+    private final Executor legacyDecodeExecutor;
     private volatile T proxy;
+    private boolean closed;
 
-    public StaticNativeDubboReference(DubboConsumerConfig config, DubboReferenceSpec<T> spec) {
+    public StaticNativeDubboReference(
+            DubboConsumerConfig config,
+            DubboReferenceSpec<T> spec,
+            Executor legacyDecodeExecutor) {
         this.config = Objects.requireNonNull(config, "config");
         this.spec = Objects.requireNonNull(spec, "spec");
         this.serviceInterface = spec.serviceInterface();
+        this.legacyDecodeExecutor = Objects.requireNonNull(legacyDecodeExecutor, "legacyDecodeExecutor");
         this.nativeClientId = createNativeClient(config, spec);
         this.staticProviders = config.providers();
     }
@@ -60,7 +67,8 @@ public final class StaticNativeDubboReference<T> implements NativeDubboReference
                     config,
                     spec,
                     serviceInterface.getMethod(methodName, types),
-                    returnType);
+                    returnType,
+                    legacyDecodeExecutor);
         } catch (NoSuchMethodException e) {
             throw new DubboConsumerException("No native Dubbo method "
                     + serviceInterface.getName() + "." + methodName, e);
@@ -68,9 +76,16 @@ public final class StaticNativeDubboReference<T> implements NativeDubboReference
     }
 
     @Override
-    public void close() {
-        NativeDubboBridge.updateProviders(nativeClientId, "");
-        NativeDubboBridge.closeClient(nativeClientId);
+    public synchronized void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        try {
+            NativeDubboBridge.updateProviders(nativeClientId, "");
+        } finally {
+            NativeDubboBridge.closeClient(nativeClientId);
+        }
     }
 
     private T createProxy() {
@@ -100,7 +115,8 @@ public final class StaticNativeDubboReference<T> implements NativeDubboReference
                             config,
                             spec,
                             method,
-                            method.getReturnType()));
+                            method.getReturnType(),
+                            legacyDecodeExecutor));
             Object[] actualArgs = args == null || args.length == 0 ? EMPTY_ARGS : args;
             return invoker.invoke(actualArgs);
         }

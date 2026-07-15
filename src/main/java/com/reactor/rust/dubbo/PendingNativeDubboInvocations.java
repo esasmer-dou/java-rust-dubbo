@@ -11,14 +11,14 @@ final class PendingNativeDubboInvocations {
     private final ConcurrentHashMap<Long, PendingInvoke<?>> pending = new ConcurrentHashMap<>();
 
     PendingCall begin(int clientId) {
-        long callbackId = callbackIds.getAndIncrement();
+        long callbackId = nextCallbackId();
         CompletableFuture<byte[]> future = new CompletableFuture<>();
         pending.put(callbackId, new PendingInvoke<>(clientId, future));
         return new PendingCall(callbackId, future);
     }
 
     PendingNativeResponseCall beginNativeResponse(int clientId) {
-        long callbackId = callbackIds.getAndIncrement();
+        long callbackId = nextCallbackId();
         CompletableFuture<NativeResponseHandle> future = new CompletableFuture<>();
         pending.put(callbackId, new PendingInvoke<>(clientId, future));
         return new PendingNativeResponseCall(callbackId, future);
@@ -47,9 +47,26 @@ final class PendingNativeDubboInvocations {
         rejected(call.callbackId(), call.future(), message);
     }
 
+    void rejected(PendingCall call, Throwable error) {
+        rejected(call.callbackId(), call.future(), error);
+    }
+
+    void rejected(PendingNativeResponseCall call, Throwable error) {
+        rejected(call.callbackId(), call.future(), error);
+    }
+
     private void rejected(long callbackId, CompletableFuture<?> future, String message) {
         if (pending.remove(callbackId) != null) {
             future.completeExceptionally(new DubboConsumerException(message));
+        }
+    }
+
+    private void rejected(long callbackId, CompletableFuture<?> future, Throwable error) {
+        if (pending.remove(callbackId) != null) {
+            RuntimeException failure = error instanceof RuntimeException runtime
+                    ? runtime
+                    : new DubboConsumerException("Native Dubbo async invocation failed", error);
+            future.completeExceptionally(failure);
         }
     }
 
@@ -100,6 +117,14 @@ final class PendingNativeDubboInvocations {
 
     int size() {
         return pending.size();
+    }
+
+    private long nextCallbackId() {
+        long callbackId = callbackIds.getAndIncrement();
+        if (callbackId > 0) {
+            return callbackId;
+        }
+        throw new IllegalStateException("Native Dubbo callback id space exhausted");
     }
 
     record PendingCall(long callbackId, CompletableFuture<byte[]> future) {}

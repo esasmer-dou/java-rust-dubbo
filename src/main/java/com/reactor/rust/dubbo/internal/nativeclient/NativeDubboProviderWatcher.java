@@ -6,6 +6,7 @@ import com.reactor.rust.dubbo.DubboReferenceSpec;
 import com.reactor.rust.dubbo.NativeDubboBridge;
 import com.reactor.rust.dubbo.internal.registry.ProviderWatcher;
 import com.reactor.rust.dubbo.internal.registry.ZookeeperRegistryClient;
+import com.reactor.rust.dubbo.internal.util.CoalescingTask;
 
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.WatchedEvent;
@@ -19,6 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 
 final class NativeDubboProviderWatcher<T> implements ProviderWatcher {
 
@@ -27,11 +29,11 @@ final class NativeDubboProviderWatcher<T> implements ProviderWatcher {
     private final DubboConsumerConfig config;
     private final DubboReferenceSpec<T> spec;
     private final ZookeeperRegistryClient zookeeper;
-    private final Executor refreshExecutor;
     private final int nativeClientId;
     private final String providerPath;
     private final Watcher watcher = this::onWatchedEvent;
-    private final Runnable reconnectRefresh = this::refreshSync;
+    private final CoalescingTask refreshTask;
+    private final Runnable reconnectRefresh;
     private volatile boolean closed;
 
     NativeDubboProviderWatcher(
@@ -43,14 +45,21 @@ final class NativeDubboProviderWatcher<T> implements ProviderWatcher {
         this.config = config;
         this.spec = spec;
         this.zookeeper = zookeeper;
-        this.refreshExecutor = refreshExecutor;
         this.nativeClientId = nativeClientId;
         this.providerPath = providerPath(config, spec);
+        this.refreshTask = new CoalescingTask(refreshExecutor, this::refreshSync);
+        this.reconnectRefresh = refreshTask::request;
     }
 
     public void start() {
         zookeeper.registerRefresh(reconnectRefresh);
-        refreshSync();
+        try {
+            refreshSync();
+        } catch (RuntimeException | LinkageError failure) {
+            closed = true;
+            zookeeper.unregisterRefresh(reconnectRefresh);
+            throw failure;
+        }
     }
 
     @Override
@@ -68,7 +77,7 @@ final class NativeDubboProviderWatcher<T> implements ProviderWatcher {
         if (type == Watcher.Event.EventType.NodeChildrenChanged
                 || type == Watcher.Event.EventType.NodeCreated
                 || type == Watcher.Event.EventType.NodeDeleted) {
-            refreshExecutor.execute(this::refreshSync);
+            requestRefresh();
         }
     }
 
@@ -79,15 +88,25 @@ final class NativeDubboProviderWatcher<T> implements ProviderWatcher {
         try {
             List<String> children = readChildrenAndInstallWatcher();
             List<String> endpoints = buildEndpoints(children);
+            NativeDubboBridge.updateProviders(nativeClientId, String.join(",", endpoints));
             if (config.check() && endpoints.isEmpty()) {
                 throw new DubboConsumerException("No native Dubbo provider available for "
                         + spec.serviceInterface().getName() + " from " + providerPath);
             }
-            NativeDubboBridge.updateProviders(nativeClientId, String.join(",", endpoints));
         } catch (Exception e) {
             if (config.check()) {
                 throw new DubboConsumerException("Failed to refresh native Dubbo providers for "
                         + spec.serviceInterface().getName() + " from " + providerPath, e);
+            }
+        }
+    }
+
+    private void requestRefresh() {
+        try {
+            refreshTask.request();
+        } catch (RejectedExecutionException rejected) {
+            if (!closed) {
+                throw rejected;
             }
         }
     }
