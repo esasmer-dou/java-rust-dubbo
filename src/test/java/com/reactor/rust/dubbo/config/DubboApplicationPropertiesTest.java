@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class DubboApplicationPropertiesTest {
@@ -32,5 +33,11 @@ class DubboApplicationPropertiesTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> DubboApplicationProperties.from(values).getBoolean("dubbo.sample.enabled"));
+    }
+
+    @Test
+    void booleanDefaultIsUsedOnlyWhenAValueIsMissing() {
+        assertFalse(DubboApplicationProperties.from(new Properties())
+                .getBoolean("dubbo.sample.enabled", false));
     }
 }

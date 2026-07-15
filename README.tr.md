@@ -36,7 +36,7 @@ Bu kütüphane, "dependency ekleyince her şeyi otomatik yapsın" yaklaşımınd
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.2.3</version>
+  <version>0.3.1</version>
 </dependency>
 ```
 
@@ -82,7 +82,7 @@ En küçük static-provider native kurulum için full JAR yerine `native-static`
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.2.3</version>
+  <version>0.3.1</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -98,7 +98,7 @@ ZooKeeper discovery, argümanlı Dubbo metotları, DTO decode, official Dubbo uy
 
 Native modun çalışması için Java/Rust framework native library de yüklü olmalıdır. `rust-java-rest` içinde bu native library framework tarafından yüklenir. Standalone testlerde `rust_hyper` kütüphanesini `java.library.path` ile görünür hale getirmek gerekir.
 
-Native Dubbo transport, Dubbo native ABI `5` gerektirir. Uyumlu `rust-java-rest:3.2.7` runtime REST
+Native Dubbo transport, Dubbo native ABI `5` gerektirir. Uyumlu `rust-java-rest:3.3.1` runtime REST
 ABI `23`, Dubbo ABI `5` ve Redis ABI `5` raporlar. Framework startup sırasında paketlenen kaynak
 revision ve platform hash bilgisini doğrular. `NativeDubboBridge` de ilk native client oluşturulmadan
 önce Dubbo ABI kontrolü yapar. Eski framework release'inden alınan DLL/SO dosyasını yeni image içine
@@ -160,23 +160,29 @@ DubboReferenceSpec<CatalogService> spec = support.reference(CatalogService.class
 Provider örneği:
 
 ```java
-DubboApplicationProperties properties =
-        DubboApplicationProperties.load("provider.properties");
-DubboProviderRuntimeTuning.applyLowRssDefaults(properties);
+public final class CatalogProviderApplication {
+    public static void main(String[] args) throws Exception {
+        DubboProviderApplication.run(
+                "provider.properties",
+                "catalog-provider",
+                CatalogProviderModule.INSTANCE);
+    }
+}
+```
 
-DubboProviderApplication.builder(properties)
-        .name("catalog-provider")
-        .registryEnabled(properties.getBoolean("reactor.dubbo.registry-enabled"))
-        .module(context -> {
-            CatalogRepository repository =
-                    context.manage(CatalogRepository.fromProperties(properties));
-            context.service(CatalogService.class, new CatalogServiceImpl(repository));
-        })
-        .run();
+Named module yalnızca açık kaynak ve servis planını taşır:
+
+```java
+public void configure(DubboProviderApplication.ModuleContext context) {
+    CatalogRepository repository = context.manage(
+            CatalogRepository.fromProperties(context.properties()));
+    context.service(CatalogService.class, new CatalogServiceImpl(repository));
+}
 ```
 
 Uygulama servisi ve kaynağı tanımlar. Library; export, registry kaydı, başlangıç hatasında geri alma,
-shutdown hook ve kaynakları ters sırada kapatma işlerini yönetir.
+low-RSS provider varsayılanları, shutdown hook ve kaynakları ters sırada kapatma işlerini yönetir.
+Builder, yalnızca standart dışı embedded lifecycle ihtiyacı için kullanılmalıdır.
 
 BEST: Servis listesini açık tutun. Sadece tekrar eden lifecycle kodunu helper sınıflara taşıyın.
 ANTI-PATTERN: Classpath'teki her interface'i otomatik export eden gizli scanner eklemeyin.
@@ -522,6 +528,6 @@ mvn clean verify
 
 Üretilen paketler:
 
-- `target/java-rust-dubbo-0.2.3.jar`
-- `target/java-rust-dubbo-0.2.3-native-static.jar`
-- `target/java-rust-dubbo-0.2.3-sources.jar`
+- `target/java-rust-dubbo-0.3.1.jar`
+- `target/java-rust-dubbo-0.3.1-native-static.jar`
+- `target/java-rust-dubbo-0.3.1-sources.jar`

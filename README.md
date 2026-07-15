@@ -31,7 +31,7 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.2.3</version>
+  <version>0.3.1</version>
 </dependency>
 ```
 
@@ -77,7 +77,7 @@ For the smallest static-provider native setup, use the `native-static` classifie
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.2.3</version>
+  <version>0.3.1</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -93,7 +93,7 @@ If you need ZooKeeper discovery, argument-bearing Dubbo methods, DTO decoding, o
 
 The Java/Rust framework native library must also be present. In `rust-java-rest`, the framework loads that native library for you. In standalone tests, make sure `rust_hyper` is available through `java.library.path`.
 
-Native Dubbo transport requires Dubbo native ABI `5`. The aligned `rust-java-rest:3.2.7` runtime
+Native Dubbo transport requires Dubbo native ABI `5`. The aligned `rust-java-rest:3.3.1` runtime
 reports REST ABI `23`, Dubbo ABI `5`, and Redis ABI `5`. Framework startup verifies the packaged
 source revision and platform hash; `NativeDubboBridge` also checks the Dubbo ABI before the first
 native client is created. Do not copy a DLL/SO from an older framework release into a newer image.
@@ -154,23 +154,29 @@ DubboReferenceSpec<CatalogService> spec = support.reference(CatalogService.class
 Provider example:
 
 ```java
-DubboApplicationProperties properties =
-        DubboApplicationProperties.load("provider.properties");
-DubboProviderRuntimeTuning.applyLowRssDefaults(properties);
+public final class CatalogProviderApplication {
+    public static void main(String[] args) throws Exception {
+        DubboProviderApplication.run(
+                "provider.properties",
+                "catalog-provider",
+                CatalogProviderModule.INSTANCE);
+    }
+}
+```
 
-DubboProviderApplication.builder(properties)
-        .name("catalog-provider")
-        .registryEnabled(properties.getBoolean("reactor.dubbo.registry-enabled"))
-        .module(context -> {
-            CatalogRepository repository =
-                    context.manage(CatalogRepository.fromProperties(properties));
-            context.service(CatalogService.class, new CatalogServiceImpl(repository));
-        })
-        .run();
+The named module contains only the explicit resource and service plan:
+
+```java
+public void configure(DubboProviderApplication.ModuleContext context) {
+    CatalogRepository repository = context.manage(
+            CatalogRepository.fromProperties(context.properties()));
+    context.service(CatalogService.class, new CatalogServiceImpl(repository));
+}
 ```
 
 The application declares the service and resource. The library owns export, registry registration,
-startup rollback, shutdown hooks, and reverse-order resource cleanup.
+low-RSS provider defaults, startup rollback, shutdown hooks, and reverse-order resource cleanup.
+The builder remains available for unusual embedded lifecycle requirements.
 
 BEST: keep the service list explicit and move only duplicated lifecycle code to these helpers.
 ANTI-PATTERN: adding an automatic provider scanner that exports every interface on the classpath.
@@ -522,12 +528,12 @@ mvn clean verify
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-0.2.3.jar`
-- `java-rust-dubbo-0.2.3-native-static.jar`
-- `java-rust-dubbo-0.2.3-sources.jar`
+- `java-rust-dubbo-0.3.1.jar`
+- `java-rust-dubbo-0.3.1-native-static.jar`
+- `java-rust-dubbo-0.3.1-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v0.2.3.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.3.1.md)
 - [Turkish README](README.tr.md)

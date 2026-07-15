@@ -80,7 +80,15 @@ public final class DubboApplicationProperties {
     }
 
     public boolean getBoolean(String key) {
-        String value = get(key);
+        return parseBoolean(key, get(key));
+    }
+
+    public boolean getBoolean(String key, boolean defaultValue) {
+        String value = find(key);
+        return value == null || value.isBlank() ? defaultValue : parseBoolean(key, value.trim());
+    }
+
+    private static boolean parseBoolean(String key, String value) {
         if ("true".equalsIgnoreCase(value) || "1".equals(value) || "yes".equalsIgnoreCase(value)) {
             return true;
         }

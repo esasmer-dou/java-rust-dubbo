@@ -1,5 +1,7 @@
 package com.reactor.rust.dubbo.provider;
 
+import com.reactor.rust.dubbo.config.DubboApplicationProperties;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -17,15 +19,35 @@ public final class DubboProviderApplication {
     private DubboProviderApplication() {}
 
     public static Builder builder() {
-        return new Builder(DubboProviderSupport.fromProperties());
+        return builder(new Properties());
     }
 
     public static Builder builder(Properties properties) {
-        return new Builder(DubboProviderSupport.fromProperties(properties));
+        return builder(DubboApplicationProperties.from(properties));
     }
 
-    public static Builder builder(com.reactor.rust.dubbo.config.DubboApplicationProperties properties) {
-        return builder(Objects.requireNonNull(properties, "properties").asProperties());
+    public static Builder builder(DubboApplicationProperties properties) {
+        DubboApplicationProperties applicationProperties = Objects.requireNonNull(properties, "properties");
+        return new Builder(
+                DubboProviderSupport.fromProperties(applicationProperties.asProperties()),
+                applicationProperties);
+    }
+
+    public static void run(String classpathResource, String name, Module... modules) throws Exception {
+        run(DubboApplicationProperties.load(classpathResource), name, modules);
+    }
+
+    public static void run(DubboApplicationProperties properties, String name, Module... modules) throws Exception {
+        Module[] validatedModules = requireModules(modules);
+        configureModules(configuredBuilder(properties, name), validatedModules).run();
+    }
+
+    public static RunningProvider start(
+            DubboApplicationProperties properties,
+            String name,
+            Module... modules) throws Exception {
+        Module[] validatedModules = requireModules(modules);
+        return configureModules(configuredBuilder(properties, name), validatedModules).start();
     }
 
     @FunctionalInterface
@@ -54,6 +76,10 @@ public final class DubboProviderApplication {
             return managed;
         }
 
+        public DubboApplicationProperties properties() {
+            return builder.properties;
+        }
+
         public <T> ModuleContext service(Class<T> serviceType, T implementation) {
             builder.service(serviceType, implementation);
             return this;
@@ -73,6 +99,7 @@ public final class DubboProviderApplication {
     public static final class Builder {
 
         private final DubboProviderSupport support;
+        private final DubboApplicationProperties properties;
         private final Map<Class<?>, DubboProviderSupport.ServicePlan<?>> services = new LinkedHashMap<>();
         private final List<AutoCloseable> managedResources = new ArrayList<>();
         private final List<StartupAction> startupActions = new ArrayList<>();
@@ -82,8 +109,9 @@ public final class DubboProviderApplication {
         private boolean registryEnabled;
         private boolean started;
 
-        private Builder(DubboProviderSupport support) {
+        private Builder(DubboProviderSupport support, DubboApplicationProperties properties) {
             this.support = support;
+            this.properties = properties;
         }
 
         public Builder name(String name) {
@@ -183,6 +211,35 @@ public final class DubboProviderApplication {
                 throw startupFailure;
             }
         }
+    }
+
+    private static Builder configuredBuilder(DubboApplicationProperties properties, String name) {
+        DubboApplicationProperties applicationProperties = Objects.requireNonNull(properties, "properties");
+        String providerName = requireText(name, "name");
+        DubboProviderRuntimeTuning.applyLowRssDefaults(applicationProperties);
+        return builder(applicationProperties)
+                .name(providerName)
+                .registryEnabled(applicationProperties.getBoolean("reactor.dubbo.registry-enabled", false))
+                .shutdownThreadName(applicationProperties.get(
+                        "reactor.dubbo.provider.shutdown-thread-name", "dubbo-" + providerName + "-shutdown"));
+    }
+
+    private static Module[] requireModules(Module... modules) {
+        Objects.requireNonNull(modules, "modules");
+        if (modules.length == 0) {
+            throw new IllegalArgumentException("At least one Dubbo provider module is required");
+        }
+        for (Module module : modules) {
+            Objects.requireNonNull(module, "module");
+        }
+        return modules;
+    }
+
+    private static Builder configureModules(Builder builder, Module... modules) {
+        for (Module module : modules) {
+            builder.module(module);
+        }
+        return builder;
     }
 
     public static final class RunningProvider implements AutoCloseable {
