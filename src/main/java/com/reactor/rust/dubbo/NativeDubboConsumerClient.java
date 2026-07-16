@@ -176,7 +176,8 @@ public final class NativeDubboConsumerClient implements AutoCloseable {
                 NativeDubboBridge.configureAsync(
                         config.nativeAsyncWorkers(),
                         config.nativeAsyncQueueCapacity(),
-                        config.nativeAsyncTransport());
+                        config.nativeAsyncTransport(),
+                        config.nativeThreadStackBytes());
                 nativeAsyncConfigured = true;
             }
         }

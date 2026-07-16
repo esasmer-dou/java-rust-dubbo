@@ -13,6 +13,10 @@ The library keeps the programming model simple:
 - Dubbo calls can use a Rust native transport for lower JVM RSS.
 - ZooKeeper and the official Dubbo/Netty client stack are optional, not default requirements.
 
+The current aligned release is `java-rust-dubbo:0.4.0` with `rust-java-rest:3.4.0`. It adds a
+bounded native thread-stack setting and ensures each native client allocates only the selected
+`blocking` or `tokio-demux` transport plane.
+
 ## When To Use It
 
 Recommended for:
@@ -31,7 +35,7 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.3.1</version>
+  <version>0.4.0</version>
 </dependency>
 ```
 
@@ -77,7 +81,7 @@ For the smallest static-provider native setup, use the `native-static` classifie
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.3.1</version>
+  <version>0.4.0</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -93,8 +97,8 @@ If you need ZooKeeper discovery, argument-bearing Dubbo methods, DTO decoding, o
 
 The Java/Rust framework native library must also be present. In `rust-java-rest`, the framework loads that native library for you. In standalone tests, make sure `rust_hyper` is available through `java.library.path`.
 
-Native Dubbo transport requires Dubbo native ABI `5`. The aligned `rust-java-rest:3.3.1` runtime
-reports REST ABI `23`, Dubbo ABI `5`, and Redis ABI `5`. Framework startup verifies the packaged
+Native Dubbo transport requires Dubbo native ABI `6`. The aligned `rust-java-rest:3.4.0` runtime
+reports REST ABI `24`, Dubbo ABI `6`, and Redis ABI `6`. Framework startup verifies the packaged
 source revision and platform hash; `NativeDubboBridge` also checks the Dubbo ABI before the first
 native client is created. Do not copy a DLL/SO from an older framework release into a newer image.
 
@@ -456,6 +460,13 @@ REACTOR_DUBBO_NATIVE_ASYNC_WORKERS=8
 | `reactor.dubbo.native-async-workers` | `2` | Native worker count used for async Dubbo calls. | Low RSS can keep this small. Balanced throughput should raise it with load tests. |
 | `reactor.dubbo.native-async-queue-capacity` | `128` | Bounded queue for native async calls. If full, calls fail fast instead of growing memory. | Keep bounded. Raise together with workers and route-level limits. |
 | `reactor.dubbo.native-async-transport` | `blocking` | Async execution model. `blocking` uses the smallest worker model; `tokio-demux` uses Rust async request-id demux over provider connections. | Use `blocking` for lowest RSS and low traffic. Use `tokio-demux` for read-heavy/high-concurrency routes after a Docker RSS + p99 gate. |
+| `reactor.dubbo.native-thread-stack-bytes` | `262144` | Stack size for native Dubbo worker and Tokio threads. Valid range: `131072..8388608`. | Keep `262144` for memory-first profiles. Raise only after a stack-overflow proof; lowering requires full route smoke tests. |
+
+Transport selection is exclusive per native client. `blocking` allocates blocking endpoint pools and
+no async endpoint pools. `tokio-demux` allocates async endpoint pools and no blocking endpoint pools;
+the synchronous Java facade bridges to that same Tokio runtime. Verify this with
+`nativeDubboBlockingEndpointPools` and `nativeDubboAsyncEndpointPools` metrics. Do not enable both
+resource models to hide overload.
 
 ### ZooKeeper And Official-Mode Properties
 
@@ -528,12 +539,12 @@ mvn clean verify
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-0.3.1.jar`
-- `java-rust-dubbo-0.3.1-native-static.jar`
-- `java-rust-dubbo-0.3.1-sources.jar`
+- `java-rust-dubbo-0.4.0.jar`
+- `java-rust-dubbo-0.4.0-native-static.jar`
+- `java-rust-dubbo-0.4.0-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v0.3.1.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.4.0.md)
 - [Turkish README](README.tr.md)

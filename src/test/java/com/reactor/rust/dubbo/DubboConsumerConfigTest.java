@@ -37,6 +37,7 @@ class DubboConsumerConfigTest {
         properties.setProperty("reactor.dubbo.native-max-idle-connections-per-endpoint", "3");
         properties.setProperty("reactor.dubbo.native-async-workers", "6");
         properties.setProperty("reactor.dubbo.native-async-queue-capacity", "256");
+        properties.setProperty("reactor.dubbo.native-thread-stack-bytes", "524288");
         properties.setProperty("reactor.dubbo.native-async-transport", "tokio-demux");
         properties.setProperty("reactor.dubbo.providers", "10.0.0.1:20880, 10.0.0.2:20880");
         properties.setProperty("reactor.dubbo.runtime-profile", "throughput");
@@ -60,6 +61,7 @@ class DubboConsumerConfigTest {
         assertEquals(3, config.nativeMaxIdleConnectionsPerEndpoint());
         assertEquals(6, config.nativeAsyncWorkers());
         assertEquals(256, config.nativeAsyncQueueCapacity());
+        assertEquals(524288, config.nativeThreadStackBytes());
         assertEquals("tokio-demux", config.nativeAsyncTransport());
         assertEquals("10.0.0.1:20880,10.0.0.2:20880", config.providers());
         assertEquals("throughput", config.runtimeProfile());

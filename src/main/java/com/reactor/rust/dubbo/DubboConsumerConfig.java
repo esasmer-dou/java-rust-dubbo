@@ -46,6 +46,7 @@ public final class DubboConsumerConfig {
     private final int nativeMaxIdleConnectionsPerEndpoint;
     private final int nativeAsyncWorkers;
     private final int nativeAsyncQueueCapacity;
+    private final int nativeThreadStackBytes;
     private final String nativeAsyncTransport;
     private final String runtimeProfile;
     private final String transport;
@@ -93,6 +94,11 @@ public final class DubboConsumerConfig {
                 "nativeMaxIdleConnectionsPerEndpoint");
         this.nativeAsyncWorkers = requirePositive(builder.nativeAsyncWorkers, "nativeAsyncWorkers");
         this.nativeAsyncQueueCapacity = requirePositive(builder.nativeAsyncQueueCapacity, "nativeAsyncQueueCapacity");
+        this.nativeThreadStackBytes = requireRange(
+                builder.nativeThreadStackBytes,
+                128 * 1024,
+                8 * 1024 * 1024,
+                "nativeThreadStackBytes");
         this.nativeAsyncTransport = normalizeNativeAsyncTransport(builder.nativeAsyncTransport);
         this.runtimeProfile = normalizeRuntimeProfile(builder.runtimeProfile);
         this.transport = normalizeTransport(builder.transport);
@@ -155,6 +161,10 @@ public final class DubboConsumerConfig {
         builder.nativeAsyncWorkers(readInt(properties, "native-async-workers", builder.nativeAsyncWorkers));
         builder.nativeAsyncQueueCapacity(readInt(properties, "native-async-queue-capacity",
                 builder.nativeAsyncQueueCapacity));
+        builder.nativeThreadStackBytes(readInt(
+                properties,
+                "native-thread-stack-bytes",
+                builder.nativeThreadStackBytes));
         builder.nativeAsyncTransport(readString(properties, "native-async-transport", builder.nativeAsyncTransport));
         builder.runtimeProfile(readString(properties, "runtime-profile", builder.runtimeProfile));
         builder.transport(readString(properties, "transport", builder.transport));
@@ -273,6 +283,10 @@ public final class DubboConsumerConfig {
 
     public int nativeAsyncQueueCapacity() {
         return nativeAsyncQueueCapacity;
+    }
+
+    public int nativeThreadStackBytes() {
+        return nativeThreadStackBytes;
     }
 
     public String nativeAsyncTransport() {
@@ -421,6 +435,14 @@ public final class DubboConsumerConfig {
         return value;
     }
 
+    private static int requireRange(int value, int minimum, int maximum, String name) {
+        if (value < minimum || value > maximum) {
+            throw new IllegalArgumentException(
+                    name + " must be between " + minimum + " and " + maximum);
+        }
+        return value;
+    }
+
     private static String requireText(String value, String name) {
         if (isBlank(value)) {
             throw new IllegalArgumentException(name + " must not be blank");
@@ -463,6 +485,7 @@ public final class DubboConsumerConfig {
         private int nativeMaxIdleConnectionsPerEndpoint = 1;
         private int nativeAsyncWorkers = 1;
         private int nativeAsyncQueueCapacity = 32;
+        private int nativeThreadStackBytes = 256 * 1024;
         private String nativeAsyncTransport = DEFAULT_NATIVE_ASYNC_TRANSPORT;
         private String runtimeProfile = DEFAULT_RUNTIME_PROFILE;
         private String transport = DEFAULT_TRANSPORT;
@@ -598,6 +621,11 @@ public final class DubboConsumerConfig {
 
         public Builder nativeAsyncQueueCapacity(int nativeAsyncQueueCapacity) {
             this.nativeAsyncQueueCapacity = nativeAsyncQueueCapacity;
+            return this;
+        }
+
+        public Builder nativeThreadStackBytes(int nativeThreadStackBytes) {
+            this.nativeThreadStackBytes = nativeThreadStackBytes;
             return this;
         }
 

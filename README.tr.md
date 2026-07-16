@@ -12,6 +12,10 @@ Kullanım modeli basittir:
 - İsterseniz Dubbo TCP data-plane Rust tarafında çalışır; böylece consumer JVM daha küçük kalır.
 - ZooKeeper, Netty ve resmi Dubbo client stack varsayılan olarak zorunlu değildir.
 
+Güncel uyumlu sürüm çizgisi `java-rust-dubbo:0.4.0` ve `rust-java-rest:3.4.0` şeklindedir. Bu sürüm,
+native thread stack bütçesini sınırlar. Ayrıca her native client yalnızca seçilen `blocking` veya
+`tokio-demux` transport kaynaklarını açar.
+
 Bu kütüphane, "dependency ekleyince her şeyi otomatik yapsın" yaklaşımından bilinçli olarak uzak durur. Kurulum açık ve kontrollüdür. Bunun nedeni memory, thread ve latency davranışını üretim ortamında daha öngörülebilir yönetmektir.
 
 ## Ne Zaman Kullanılır?
@@ -36,7 +40,7 @@ Bu kütüphane, "dependency ekleyince her şeyi otomatik yapsın" yaklaşımınd
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.3.1</version>
+  <version>0.4.0</version>
 </dependency>
 ```
 
@@ -82,7 +86,7 @@ En küçük static-provider native kurulum için full JAR yerine `native-static`
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.3.1</version>
+  <version>0.4.0</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -98,8 +102,8 @@ ZooKeeper discovery, argümanlı Dubbo metotları, DTO decode, official Dubbo uy
 
 Native modun çalışması için Java/Rust framework native library de yüklü olmalıdır. `rust-java-rest` içinde bu native library framework tarafından yüklenir. Standalone testlerde `rust_hyper` kütüphanesini `java.library.path` ile görünür hale getirmek gerekir.
 
-Native Dubbo transport, Dubbo native ABI `5` gerektirir. Uyumlu `rust-java-rest:3.3.1` runtime REST
-ABI `23`, Dubbo ABI `5` ve Redis ABI `5` raporlar. Framework startup sırasında paketlenen kaynak
+Native Dubbo transport, Dubbo native ABI `6` gerektirir. Uyumlu `rust-java-rest:3.4.0` runtime REST
+ABI `24`, Dubbo ABI `6` ve Redis ABI `6` raporlar. Framework startup sırasında paketlenen kaynak
 revision ve platform hash bilgisini doğrular. `NativeDubboBridge` de ilk native client oluşturulmadan
 önce Dubbo ABI kontrolü yapar. Eski framework release'inden alınan DLL/SO dosyasını yeni image içine
 kopyalamayın.
@@ -455,6 +459,13 @@ REACTOR_DUBBO_NATIVE_ASYNC_WORKERS=8
 | `reactor.dubbo.native-async-workers` | `2` | Async Dubbo çağrı işleyici worker sayısıdır. | Low-RSS için küçük tutun. Throughput için benchmark ile artırın. |
 | `reactor.dubbo.native-async-queue-capacity` | `128` | Async çağrı queue limitidir. Doluysa çağrı fail-fast olur. | Her zaman bounded kalsın. Worker ve route bulkhead ile birlikte ayarlayın. |
 | `reactor.dubbo.native-async-transport` | `blocking` | Async çalışma modelidir. `blocking` en küçük worker modelini kullanır; `tokio-demux` provider connection üzerinde Rust async request-id demux kullanır. | En düşük RSS ve düşük trafik için `blocking`. Read-heavy/yüksek concurrency için Docker RSS + p99 gate geçerse `tokio-demux`. |
+| `reactor.dubbo.native-thread-stack-bytes` | `262144` | Native Dubbo worker ve Tokio thread stack boyutudur. Geçerli aralık: `131072..8388608`. | Memory-first profilde `262144` kalsın. Yalnız stack overflow kanıtı varsa artırın. Düşürürseniz tüm route smoke testlerini çalıştırın. |
+
+Transport seçimi native client bazında karşılıklı dışlayıcıdır. `blocking` yalnız blocking endpoint
+pool'larını açar. Async endpoint pool açmaz. `tokio-demux` yalnız async endpoint pool'larını açar;
+senkron Java facade da aynı Tokio runtime üzerinden çalışır. Bu durumu
+`nativeDubboBlockingEndpointPools` ve `nativeDubboAsyncEndpointPools` metrikleriyle doğrulayın.
+Overload'u saklamak için iki kaynak modelini birlikte açmayın.
 
 ### ZooKeeper ve Official Mode Ayarları
 
@@ -528,6 +539,8 @@ mvn clean verify
 
 Üretilen paketler:
 
-- `target/java-rust-dubbo-0.3.1.jar`
-- `target/java-rust-dubbo-0.3.1-native-static.jar`
-- `target/java-rust-dubbo-0.3.1-sources.jar`
+- `target/java-rust-dubbo-0.4.0.jar`
+- `target/java-rust-dubbo-0.4.0-native-static.jar`
+- `target/java-rust-dubbo-0.4.0-sources.jar`
+
+Sürüm ayrıntıları: [java-rust-dubbo 0.4.0](docs/RELEASE_NOTES_v0.4.0.md).

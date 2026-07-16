@@ -4,7 +4,7 @@ import java.util.concurrent.CompletableFuture;
 
 public final class NativeDubboBridge {
 
-    private static final int EXPECTED_DUBBO_NATIVE_ABI_VERSION = 5;
+    private static final int EXPECTED_DUBBO_NATIVE_ABI_VERSION = 6;
     private static final byte[] EMPTY_BYTES = new byte[0];
     private static final PendingNativeDubboInvocations PENDING = new PendingNativeDubboInvocations();
     private static AsyncConfig asyncConfig;
@@ -43,14 +43,23 @@ public final class NativeDubboBridge {
     }
 
     public static synchronized void configureAsync(int workers, int queueCapacity) {
-        configureAsync(workers, queueCapacity, "blocking");
+        configureAsync(workers, queueCapacity, "blocking", 256 * 1024);
     }
 
     public static synchronized void configureAsync(int workers, int queueCapacity, String transport) {
+        configureAsync(workers, queueCapacity, transport, 256 * 1024);
+    }
+
+    public static synchronized void configureAsync(
+            int workers,
+            int queueCapacity,
+            String transport,
+            int threadStackBytes) {
         AsyncConfig requested = new AsyncConfig(
                 workers,
                 queueCapacity,
-                transport == null ? "blocking" : transport.trim().toLowerCase(java.util.Locale.ROOT));
+                transport == null ? "blocking" : transport.trim().toLowerCase(java.util.Locale.ROOT),
+                threadStackBytes);
         if (asyncConfig != null) {
             if (!asyncConfig.equals(requested)) {
                 throw new DubboConsumerException(
@@ -59,7 +68,7 @@ public final class NativeDubboBridge {
             }
             return;
         }
-        nativeConfigureAsync(workers, queueCapacity);
+        nativeConfigureAsync(workers, queueCapacity, threadStackBytes);
         nativeConfigureAsyncTransport(requested.transport());
         asyncConfig = requested;
     }
@@ -304,7 +313,7 @@ public final class NativeDubboBridge {
         return PENDING.size();
     }
 
-    private record AsyncConfig(int workers, int queueCapacity, String transport) {
+    private record AsyncConfig(int workers, int queueCapacity, String transport, int threadStackBytes) {
         private AsyncConfig {
             if (workers < 1 || workers > 256) {
                 throw new IllegalArgumentException("workers must be between 1 and 256");
@@ -314,6 +323,9 @@ public final class NativeDubboBridge {
             }
             if (!"blocking".equals(transport) && !"tokio-demux".equals(transport)) {
                 throw new IllegalArgumentException("transport must be blocking or tokio-demux");
+            }
+            if (threadStackBytes < 128 * 1024 || threadStackBytes > 8 * 1024 * 1024) {
+                throw new IllegalArgumentException("threadStackBytes must be between 131072 and 8388608");
             }
         }
     }
@@ -335,7 +347,7 @@ public final class NativeDubboBridge {
 
     private static native int nativeUpdateProviders(int clientId, String providers);
 
-    private static native void nativeConfigureAsync(int workers, int queueCapacity);
+    private static native void nativeConfigureAsync(int workers, int queueCapacity, int threadStackBytes);
 
     private static native void nativeConfigureAsyncTransport(String transport);
 
