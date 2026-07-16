@@ -132,6 +132,7 @@ public final class StaticNativeDubboReference<T> implements NativeDubboReference
                 config.maxInflight(),
                 config.maxResponseBytes(),
                 config.nativeConnectionsPerEndpoint(),
-                config.nativeMaxIdleConnectionsPerEndpoint());
+                config.nativeMaxIdleConnectionsPerEndpoint(),
+                config.nativeIdleConnectionTtlMs());
     }
 }

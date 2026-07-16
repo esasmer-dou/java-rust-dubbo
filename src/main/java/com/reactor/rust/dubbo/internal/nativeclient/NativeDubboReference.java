@@ -146,6 +146,7 @@ final class NativeDubboReference<T> implements NativeDubboReferenceHandle<T> {
                 config.maxInflight(),
                 config.maxResponseBytes(),
                 config.nativeConnectionsPerEndpoint(),
-                config.nativeMaxIdleConnectionsPerEndpoint());
+                config.nativeMaxIdleConnectionsPerEndpoint(),
+                config.nativeIdleConnectionTtlMs());
     }
 }

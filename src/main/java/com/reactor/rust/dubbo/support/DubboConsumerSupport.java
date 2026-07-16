@@ -104,6 +104,7 @@ public final class DubboConsumerSupport {
                 .maxResponseBytes(config.maxResponseBytes())
                 .nativeConnectionsPerEndpoint(config.nativeConnectionsPerEndpoint())
                 .nativeMaxIdleConnectionsPerEndpoint(config.nativeMaxIdleConnectionsPerEndpoint())
+                .nativeIdleConnectionTtlMs(config.nativeIdleConnectionTtlMs())
                 .nativeAsyncWorkers(config.nativeAsyncWorkers())
                 .nativeAsyncQueueCapacity(config.nativeAsyncQueueCapacity())
                 .nativeAsyncTransport(config.nativeAsyncTransport())

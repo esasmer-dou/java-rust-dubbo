@@ -34,8 +34,19 @@ public final class DubboProviderSupport {
                 registryEnabled ? get("reactor.dubbo.registry-root") : "",
                 get("dubbo.provider.host"),
                 get("dubbo.provider.bind-host"),
-                getInt("dubbo.provider.port")
+                getInt("dubbo.provider.port"),
+                providerExecutorConfig()
         );
+    }
+
+    private ProviderExecutorConfig providerExecutorConfig() {
+        return new ProviderExecutorConfig(
+                getOrDefault("dubbo.provider.executor.thread-pool", "eager"),
+                getPositiveIntOrDefault("dubbo.provider.executor.core-threads", 1),
+                getPositiveIntOrDefault("dubbo.provider.executor.max-threads", 8),
+                getNonNegativeIntOrDefault("dubbo.provider.executor.queue-capacity", 16),
+                getPositiveIntOrDefault("dubbo.provider.executor.idle-timeout-ms", 30_000),
+                getPositiveIntOrDefault("dubbo.provider.executor.io-threads", 1));
     }
 
     public DubboProviderRegistration providerRegistration(boolean registryEnabled) throws Exception {
@@ -198,6 +209,20 @@ public final class DubboProviderSupport {
     private int getIntOrDefault(String key, int defaultValue) {
         String value = getOrDefault(key, "");
         return value.isBlank() ? defaultValue : parseInt(key, value);
+    }
+
+    private int getPositiveIntOrDefault(String key, int defaultValue) {
+        String value = getOrDefault(key, "");
+        return value.isBlank() ? defaultValue : parsePositiveInt(key, value);
+    }
+
+    private int getNonNegativeIntOrDefault(String key, int defaultValue) {
+        String value = getOrDefault(key, "");
+        int parsed = value.isBlank() ? defaultValue : parseInt(key, value);
+        if (parsed < 0) {
+            throw new IllegalArgumentException("Provider property must be >= 0: " + key + "=" + parsed);
+        }
+        return parsed;
     }
 
     private static int parseInt(String key, String value) {

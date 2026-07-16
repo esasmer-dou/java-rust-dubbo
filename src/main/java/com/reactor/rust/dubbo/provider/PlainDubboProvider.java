@@ -3,6 +3,7 @@ package com.reactor.rust.dubbo.provider;
 import com.reactor.rust.dubbo.internal.runtime.DubboRuntimeModel;
 import org.apache.dubbo.common.URL;
 import org.apache.dubbo.common.extension.ExtensionLoader;
+import org.apache.dubbo.common.utils.SerializeSecurityConfigurator;
 import org.apache.dubbo.rpc.Exporter;
 import org.apache.dubbo.rpc.Invoker;
 import org.apache.dubbo.rpc.Protocol;
@@ -112,7 +113,7 @@ public final class PlainDubboProvider<T> implements AutoCloseable {
         exporter.unexport();
     }
 
-    private static <T> URL providerUrl(
+    static <T> URL providerUrl(
             Class<T> serviceType,
             ProviderConfig config,
             ServiceExecutionConfig executionConfig) {
@@ -130,6 +131,15 @@ public final class PlainDubboProvider<T> implements AutoCloseable {
         parameters.put("bind.ip", config.bindHost());
         parameters.put("bind.port", Integer.toString(config.port()));
         parameters.put("dubbo", "3.3.5");
+        ProviderExecutorConfig executor = config.executor();
+        if (executor.configured()) {
+            parameters.put("threadpool", executor.threadPool());
+            parameters.put("corethreads", Integer.toString(executor.coreThreads()));
+            parameters.put("threads", Integer.toString(executor.maxThreads()));
+            parameters.put("queues", Integer.toString(executor.queueCapacity()));
+            parameters.put("alive", Integer.toString(executor.idleTimeoutMs()));
+            parameters.put("iothreads", Integer.toString(executor.ioThreads()));
+        }
         if (executionConfig.isBounded()) {
             parameters.put("executes", Integer.toString(executionConfig.maxConcurrentInvocations()));
             parameters.put("reactor.max-concurrent", Integer.toString(executionConfig.maxConcurrentInvocations()));
@@ -146,11 +156,24 @@ public final class PlainDubboProvider<T> implements AutoCloseable {
 
     private static <T> void registerServiceModel(Class<T> serviceType, T service, URL exportUrl) {
         ModuleModel module = DubboRuntimeModel.module();
+        registerServiceSerializationTypes(module, serviceType);
         ServiceDescriptor descriptor = module.getServiceRepository().registerService(serviceType);
         ServiceMetadata metadata = new ServiceMetadata();
         metadata.setServiceType(serviceType);
         metadata.setTarget(service);
         module.getServiceRepository().registerProvider(exportUrl.getServiceKey(), service, descriptor, null, metadata);
+    }
+
+    static void registerServiceSerializationTypes(Class<?> serviceType) {
+        registerServiceSerializationTypes(DubboRuntimeModel.module(), serviceType);
+    }
+
+    private static void registerServiceSerializationTypes(ModuleModel module, Class<?> serviceType) {
+        module.getBeanFactory()
+                .getOrRegisterBean(
+                        SerializeSecurityConfigurator.class,
+                        ignored -> new SerializeSecurityConfigurator(module))
+                .registerInterface(serviceType);
     }
 
     private static void registerPermittedSerialization(URL exportUrl) {
@@ -220,7 +243,30 @@ public final class PlainDubboProvider<T> implements AutoCloseable {
             String registryRoot,
             String host,
             String bindHost,
-            int port) {}
+            int port,
+            ProviderExecutorConfig executor) {
+
+        public ProviderConfig(
+                String applicationName,
+                String registryAddress,
+                String registryRoot,
+                String host,
+                String bindHost,
+                int port) {
+            this(
+                    applicationName,
+                    registryAddress,
+                    registryRoot,
+                    host,
+                    bindHost,
+                    port,
+                    ProviderExecutorConfig.unconfigured());
+        }
+
+        public ProviderConfig {
+            executor = executor == null ? ProviderExecutorConfig.unconfigured() : executor;
+        }
+    }
 
     public record ServiceExecutionConfig(
             int maxConcurrentInvocations,

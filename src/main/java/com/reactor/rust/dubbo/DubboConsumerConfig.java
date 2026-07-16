@@ -19,6 +19,7 @@ public final class DubboConsumerConfig {
     public static final String RUNTIME_PROFILE_BALANCED_DUBBO = "balanced-dubbo";
     public static final String DEFAULT_TRANSPORT = "native";
     public static final String DEFAULT_NATIVE_ASYNC_TRANSPORT = "blocking";
+    public static final int DEFAULT_NATIVE_IDLE_CONNECTION_TTL_MS = 30_000;
 
     private final String applicationName;
     private final String registryAddress;
@@ -44,6 +45,7 @@ public final class DubboConsumerConfig {
     private final int maxResponseBytes;
     private final int nativeConnectionsPerEndpoint;
     private final int nativeMaxIdleConnectionsPerEndpoint;
+    private final int nativeIdleConnectionTtlMs;
     private final int nativeAsyncWorkers;
     private final int nativeAsyncQueueCapacity;
     private final int nativeThreadStackBytes;
@@ -92,6 +94,11 @@ public final class DubboConsumerConfig {
         this.nativeMaxIdleConnectionsPerEndpoint = requireNonNegative(
                 builder.nativeMaxIdleConnectionsPerEndpoint,
                 "nativeMaxIdleConnectionsPerEndpoint");
+        this.nativeIdleConnectionTtlMs = requireRange(
+                builder.nativeIdleConnectionTtlMs,
+                1_000,
+                3_600_000,
+                "nativeIdleConnectionTtlMs");
         this.nativeAsyncWorkers = requirePositive(builder.nativeAsyncWorkers, "nativeAsyncWorkers");
         this.nativeAsyncQueueCapacity = requirePositive(builder.nativeAsyncQueueCapacity, "nativeAsyncQueueCapacity");
         this.nativeThreadStackBytes = requireRange(
@@ -158,6 +165,10 @@ public final class DubboConsumerConfig {
                 builder.nativeConnectionsPerEndpoint));
         builder.nativeMaxIdleConnectionsPerEndpoint(readInt(properties, "native-max-idle-connections-per-endpoint",
                 builder.nativeMaxIdleConnectionsPerEndpoint));
+        builder.nativeIdleConnectionTtlMs(readInt(
+                properties,
+                "native-idle-connection-ttl-ms",
+                builder.nativeIdleConnectionTtlMs));
         builder.nativeAsyncWorkers(readInt(properties, "native-async-workers", builder.nativeAsyncWorkers));
         builder.nativeAsyncQueueCapacity(readInt(properties, "native-async-queue-capacity",
                 builder.nativeAsyncQueueCapacity));
@@ -275,6 +286,10 @@ public final class DubboConsumerConfig {
 
     public int nativeMaxIdleConnectionsPerEndpoint() {
         return nativeMaxIdleConnectionsPerEndpoint;
+    }
+
+    public int nativeIdleConnectionTtlMs() {
+        return nativeIdleConnectionTtlMs;
     }
 
     public int nativeAsyncWorkers() {
@@ -483,6 +498,7 @@ public final class DubboConsumerConfig {
         private int maxResponseBytes = 8 * 1024 * 1024;
         private int nativeConnectionsPerEndpoint = 1;
         private int nativeMaxIdleConnectionsPerEndpoint = 1;
+        private int nativeIdleConnectionTtlMs = DEFAULT_NATIVE_IDLE_CONNECTION_TTL_MS;
         private int nativeAsyncWorkers = 1;
         private int nativeAsyncQueueCapacity = 32;
         private int nativeThreadStackBytes = 256 * 1024;
@@ -611,6 +627,11 @@ public final class DubboConsumerConfig {
 
         public Builder nativeMaxIdleConnectionsPerEndpoint(int nativeMaxIdleConnectionsPerEndpoint) {
             this.nativeMaxIdleConnectionsPerEndpoint = nativeMaxIdleConnectionsPerEndpoint;
+            return this;
+        }
+
+        public Builder nativeIdleConnectionTtlMs(int nativeIdleConnectionTtlMs) {
+            this.nativeIdleConnectionTtlMs = nativeIdleConnectionTtlMs;
             return this;
         }
 

@@ -21,6 +21,8 @@ reactor.dubbo.retries=0
 reactor.dubbo.timeout-ms=800
 reactor.dubbo.max-inflight=64
 reactor.dubbo.native-connections-per-endpoint=2
+reactor.dubbo.native-max-idle-connections-per-endpoint=2
+reactor.dubbo.native-idle-connection-ttl-ms=30000
 reactor.dubbo.native-async-workers=2
 reactor.dubbo.native-async-queue-capacity=64
 ```
@@ -34,6 +36,8 @@ reactor.dubbo.retries=0
 reactor.dubbo.timeout-ms=1200
 reactor.dubbo.max-inflight=512
 reactor.dubbo.native-connections-per-endpoint=16
+reactor.dubbo.native-max-idle-connections-per-endpoint=4
+reactor.dubbo.native-idle-connection-ttl-ms=30000
 reactor.dubbo.native-async-workers=8
 reactor.dubbo.native-async-queue-capacity=1024
 ```
@@ -47,9 +51,28 @@ reactor.dubbo.retries=0
 reactor.dubbo.timeout-ms=2000
 reactor.dubbo.max-inflight=1024
 reactor.dubbo.native-connections-per-endpoint=32
+reactor.dubbo.native-max-idle-connections-per-endpoint=8
+reactor.dubbo.native-idle-connection-ttl-ms=30000
 reactor.dubbo.native-async-workers=16
 reactor.dubbo.native-async-queue-capacity=4096
 ```
+
+## Provider Executor
+
+Providers started through `DubboProviderApplication` use a bounded executor by default:
+
+```properties
+dubbo.provider.executor.thread-pool=eager
+dubbo.provider.executor.core-threads=1
+dubbo.provider.executor.max-threads=8
+dubbo.provider.executor.queue-capacity=16
+dubbo.provider.executor.idle-timeout-ms=30000
+dubbo.provider.executor.io-threads=1
+```
+
+Keep DB service/method limits at or below Hikari capacity. The executor is shared by exported
+interfaces on the same Dubbo port, so it can be wider than one DB service gate. Do not use an
+unbounded handler queue or `cached` pool in a memory-limited pod.
 
 ## Backpressure Rules
 
@@ -65,6 +88,14 @@ reactor.dubbo.native-async-queue-capacity=4096
 - Do not enable retries for non-idempotent methods.
 - If retries are enabled, account for retry amplification in `max-inflight`.
 
+## Idle Connection And Write Safety
+
+- Keep `reactor.dubbo.native-idle-connection-ttl-ms=30000` as the starting value.
+- If the provider or load balancer closes idle TCP connections sooner, set the TTL below that timeout.
+- Blocking transport probes connections that have been idle for at least 100 ms before writing.
+- A closed idle socket is discarded and reconnected before request bytes are sent.
+- The client does not blindly retry a command after partial request transmission. Write methods still need an idempotency key at the business layer.
+
 ## Provider Discovery
 
 BEST for low RSS: static providers via config, DNS, or sidecar-generated list.
@@ -77,6 +108,7 @@ Expose and watch:
 
 - Native Dubbo calls, errors, timeouts, rejected calls, and pool exhaustion.
 - Native open/idle connections.
+- Native expired idle connections, idle validations, stale idle discards, and safe pre-write retries.
 - Native async submitted/completed/rejected.
 - HTTP p95/p99 and 5xx counters.
 - Route-level bulkhead limit, in-flight, rejected, and timed-out counters.

@@ -13,9 +13,10 @@ The library keeps the programming model simple:
 - Dubbo calls can use a Rust native transport for lower JVM RSS.
 - ZooKeeper and the official Dubbo/Netty client stack are optional, not default requirements.
 
-The current aligned release is `java-rust-dubbo:0.4.0` with `rust-java-rest:3.4.0`. It adds a
-bounded native thread-stack setting and ensures each native client allocates only the selected
-`blocking` or `tokio-demux` transport plane.
+The current aligned release is `java-rust-dubbo:0.4.1` with `rust-java-rest:3.4.1`. It adds bounded
+provider executor sizing and safe idle native connection reuse across provider restarts. The
+bounded native thread stack and exclusive `blocking` or `tokio-demux` transport planes remain in
+place.
 
 ## When To Use It
 
@@ -35,7 +36,7 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.4.0</version>
+  <version>0.4.1</version>
 </dependency>
 ```
 
@@ -81,7 +82,7 @@ For the smallest static-provider native setup, use the `native-static` classifie
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.4.0</version>
+  <version>0.4.1</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -97,8 +98,8 @@ If you need ZooKeeper discovery, argument-bearing Dubbo methods, DTO decoding, o
 
 The Java/Rust framework native library must also be present. In `rust-java-rest`, the framework loads that native library for you. In standalone tests, make sure `rust_hyper` is available through `java.library.path`.
 
-Native Dubbo transport requires Dubbo native ABI `6`. The aligned `rust-java-rest:3.4.0` runtime
-reports REST ABI `24`, Dubbo ABI `6`, and Redis ABI `6`. Framework startup verifies the packaged
+Native Dubbo transport requires Dubbo native ABI `7`. The aligned `rust-java-rest:3.4.1` runtime
+reports REST ABI `24`, Dubbo ABI `7`, and Redis ABI `6`. Framework startup verifies the packaged
 source revision and platform hash; `NativeDubboBridge` also checks the Dubbo ABI before the first
 native client is created. Do not copy a DLL/SO from an older framework release into a newer image.
 
@@ -182,6 +183,23 @@ The application declares the service and resource. The library owns export, regi
 low-RSS provider defaults, startup rollback, shutdown hooks, and reverse-order resource cleanup.
 The builder remains available for unusual embedded lifecycle requirements.
 
+Declarative providers also get a bounded Dubbo/Netty executor. These properties are mapped to the
+exported Dubbo URL before the server starts:
+
+```properties
+dubbo.provider.executor.thread-pool=eager
+dubbo.provider.executor.core-threads=1
+dubbo.provider.executor.max-threads=8
+dubbo.provider.executor.queue-capacity=16
+dubbo.provider.executor.idle-timeout-ms=30000
+dubbo.provider.executor.io-threads=1
+```
+
+This avoids Dubbo's default `200` handler-thread ceiling in small pods. `cached` is rejected because
+it is not a bounded production choice. Direct callers of the six-argument `ProviderConfig`
+constructor retain Dubbo defaults; `DubboProviderSupport` and `DubboProviderApplication` apply the
+bounded configuration above. Override it only with thread, RSS, p99, and rejection evidence.
+
 BEST: keep the service list explicit and move only duplicated lifecycle code to these helpers.
 ANTI-PATTERN: adding an automatic provider scanner that exports every interface on the classpath.
 
@@ -218,6 +236,8 @@ reactor.dubbo.retries=0
 reactor.dubbo.max-inflight=32
 reactor.dubbo.max-response-bytes=8388608
 reactor.dubbo.native-connections-per-endpoint=1
+reactor.dubbo.native-max-idle-connections-per-endpoint=1
+reactor.dubbo.native-idle-connection-ttl-ms=30000
 reactor.dubbo.native-async-workers=1
 reactor.dubbo.native-async-queue-capacity=32
 ```
@@ -454,11 +474,13 @@ REACTOR_DUBBO_NATIVE_ASYNC_WORKERS=8
 
 | Property | Default | What It Does | When To Change It |
 | --- | ---: | --- | --- |
-| `reactor.dubbo.max-inflight` | `256` | Max concurrent native Dubbo calls per reference. This is a bulkhead. | Lower it for low RSS and fail-fast behavior. Raise it only with enough provider capacity. |
+| `reactor.dubbo.max-inflight` | `32` | Max concurrent native Dubbo calls per reference. This is a bulkhead. | Lower it for low RSS and fail-fast behavior. Raise it only with enough provider capacity. |
 | `reactor.dubbo.max-response-bytes` | `8388608` | Max Dubbo response frame size accepted by native mode. | Raise it only if your provider really returns larger payloads. Prefer streaming or smaller responses when possible. |
-| `reactor.dubbo.native-connections-per-endpoint` | `16` | Max keepalive TCP connections per provider endpoint. One connection carries one in-flight call at a time. | Low RSS can use `2`. Balanced throughput often uses `16`. |
-| `reactor.dubbo.native-async-workers` | `2` | Native worker count used for async Dubbo calls. | Low RSS can keep this small. Balanced throughput should raise it with load tests. |
-| `reactor.dubbo.native-async-queue-capacity` | `128` | Bounded queue for native async calls. If full, calls fail fast instead of growing memory. | Keep bounded. Raise together with workers and route-level limits. |
+| `reactor.dubbo.native-connections-per-endpoint` | `1` | Max keepalive TCP connections per provider endpoint. One connection carries one in-flight call at a time. | Use `2` for a measured two-lane DB write path. Balanced throughput may use more only after a provider-capacity gate. |
+| `reactor.dubbo.native-max-idle-connections-per-endpoint` | `1` | Max completed connections retained for reuse per endpoint. | Keep it at or below `native-connections-per-endpoint`. Lower it when idle RSS matters. |
+| `reactor.dubbo.native-idle-connection-ttl-ms` | `30000` | Drops an idle pooled connection before reuse after this age. Older idle sockets are reconnected before request bytes are sent. | Keep `30000` unless the provider closes idle connections sooner. Then choose a smaller value than the provider idle timeout. Valid range: `1000..3600000`. |
+| `reactor.dubbo.native-async-workers` | `1` | Native worker count used for async Dubbo calls. | Low RSS can keep this small. Raise it with the connection count only after load tests. |
+| `reactor.dubbo.native-async-queue-capacity` | `32` | Bounded queue for native async calls. If full, calls fail fast instead of growing memory. | Keep bounded. Raise together with workers and route-level limits. |
 | `reactor.dubbo.native-async-transport` | `blocking` | Async execution model. `blocking` uses the smallest worker model; `tokio-demux` uses Rust async request-id demux over provider connections. | Use `blocking` for lowest RSS and low traffic. Use `tokio-demux` for read-heavy/high-concurrency routes after a Docker RSS + p99 gate. |
 | `reactor.dubbo.native-thread-stack-bytes` | `262144` | Stack size for native Dubbo worker and Tokio threads. Valid range: `131072..8388608`. | Keep `262144` for memory-first profiles. Raise only after a stack-overflow proof; lowering requires full route smoke tests. |
 
@@ -467,6 +489,12 @@ no async endpoint pools. `tokio-demux` allocates async endpoint pools and no blo
 the synchronous Java facade bridges to that same Tokio runtime. Verify this with
 `nativeDubboBlockingEndpointPools` and `nativeDubboAsyncEndpointPools` metrics. Do not enable both
 resource models to hide overload.
+
+Blocking transport validates a connection that has been idle for at least 100 ms before reuse. A
+closed provider socket is discarded before the request starts. The client never blindly retries a
+write after request bytes may have been sent. Watch `nativeDubboIdleConnectionsExpired`,
+`nativeDubboIdleConnectionValidations`, `nativeDubboStaleIdleConnectionsDiscarded`, and
+`nativeDubboStaleConnectionRetries` when testing provider restarts.
 
 ### ZooKeeper And Official-Mode Properties
 
@@ -477,7 +505,7 @@ resource models to hide overload.
 | `reactor.dubbo.connections` | `1` | Official-mode connection setting. Native mode uses `native-connections-per-endpoint` instead. | Mostly relevant for official mode. |
 | `reactor.dubbo.share-connections` | `1` | Official-mode shared connection setting. | Mostly relevant for official mode. |
 | `reactor.dubbo.refer-thread-num` | `1` | Worker count for provider refresh in ZooKeeper mode. It is not a request worker pool. | Keep small unless you have many references refreshing at once. |
-| `reactor.dubbo.runtime-profile` | `low-rss` | Descriptive profile value. Host applications may map it to runtime presets. | Use `low-rss`, `balanced-dubbo`, `throughput`, or `default` according to your deployment profile. |
+| `reactor.dubbo.runtime-profile` | `micro-dubbo` | Descriptive profile value. Host applications may map it to runtime presets. | Use `micro-dubbo` or `balanced-dubbo` according to your measured deployment profile. |
 
 ## Suggested Starting Profiles
 
@@ -491,6 +519,7 @@ reactor.dubbo.retries=0
 reactor.dubbo.timeout-ms=800
 reactor.dubbo.max-inflight=32
 reactor.dubbo.native-connections-per-endpoint=1
+reactor.dubbo.native-idle-connection-ttl-ms=30000
 reactor.dubbo.native-async-workers=1
 reactor.dubbo.native-async-queue-capacity=32
 ```
@@ -539,12 +568,12 @@ mvn clean verify
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-0.4.0.jar`
-- `java-rust-dubbo-0.4.0-native-static.jar`
-- `java-rust-dubbo-0.4.0-sources.jar`
+- `java-rust-dubbo-0.4.1.jar`
+- `java-rust-dubbo-0.4.1-native-static.jar`
+- `java-rust-dubbo-0.4.1-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v0.4.0.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.4.1.md)
 - [Turkish README](README.tr.md)

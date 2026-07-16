@@ -35,6 +35,7 @@ class DubboConsumerConfigTest {
         properties.setProperty("reactor.dubbo.max-response-bytes", "4096");
         properties.setProperty("reactor.dubbo.native-connections-per-endpoint", "24");
         properties.setProperty("reactor.dubbo.native-max-idle-connections-per-endpoint", "3");
+        properties.setProperty("reactor.dubbo.native-idle-connection-ttl-ms", "15000");
         properties.setProperty("reactor.dubbo.native-async-workers", "6");
         properties.setProperty("reactor.dubbo.native-async-queue-capacity", "256");
         properties.setProperty("reactor.dubbo.native-thread-stack-bytes", "524288");
@@ -59,6 +60,7 @@ class DubboConsumerConfigTest {
         assertEquals(4096, config.maxResponseBytes());
         assertEquals(24, config.nativeConnectionsPerEndpoint());
         assertEquals(3, config.nativeMaxIdleConnectionsPerEndpoint());
+        assertEquals(15000, config.nativeIdleConnectionTtlMs());
         assertEquals(6, config.nativeAsyncWorkers());
         assertEquals(256, config.nativeAsyncQueueCapacity());
         assertEquals(524288, config.nativeThreadStackBytes());
@@ -124,9 +126,20 @@ class DubboConsumerConfigTest {
         assertEquals(32, config.maxInflight());
         assertEquals(1, config.nativeConnectionsPerEndpoint());
         assertEquals(1, config.nativeMaxIdleConnectionsPerEndpoint());
+        assertEquals(30_000, config.nativeIdleConnectionTtlMs());
         assertEquals(1, config.nativeAsyncWorkers());
         assertEquals(32, config.nativeAsyncQueueCapacity());
         assertEquals("blocking", config.nativeAsyncTransport());
+    }
+
+    @Test
+    void rejectsUnsafeNativeIdleConnectionTtl() {
+        assertThrows(IllegalArgumentException.class, () -> DubboConsumerConfig.builder()
+                .nativeIdleConnectionTtlMs(999)
+                .build());
+        assertThrows(IllegalArgumentException.class, () -> DubboConsumerConfig.builder()
+                .nativeIdleConnectionTtlMs(3_600_001)
+                .build());
     }
 
 }

@@ -13,6 +13,7 @@ public final class DubboProviderRuntimeTuning {
 
     public static void applyLowRssDefaults(DubboApplicationProperties properties) {
         Objects.requireNonNull(properties, "properties");
+        setIfConfigured(properties, "dubbo.security.serialize.allowedClassList");
         setIfAbsent(properties, "io.netty.allocator.numDirectArenas", "1");
         setIfAbsent(properties, "io.netty.allocator.numHeapArenas", "1");
         setIfAbsent(properties, "io.netty.recycler.maxCapacityPerThread", "0");
@@ -29,6 +30,18 @@ public final class DubboProviderRuntimeTuning {
             String defaultValue) {
         if (System.getProperty(key) == null) {
             System.setProperty(key, properties.get(key, defaultValue));
+        }
+    }
+
+    private static void setIfConfigured(
+            DubboApplicationProperties properties,
+            String key) {
+        if (System.getProperty(key) != null) {
+            return;
+        }
+        String value = properties.get(key, "");
+        if (!value.isBlank()) {
+            System.setProperty(key, value);
         }
     }
 }

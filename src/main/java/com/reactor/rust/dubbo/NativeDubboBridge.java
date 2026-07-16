@@ -4,7 +4,7 @@ import java.util.concurrent.CompletableFuture;
 
 public final class NativeDubboBridge {
 
-    private static final int EXPECTED_DUBBO_NATIVE_ABI_VERSION = 6;
+    private static final int EXPECTED_DUBBO_NATIVE_ABI_VERSION = 7;
     private static final byte[] EMPTY_BYTES = new byte[0];
     private static final PendingNativeDubboInvocations PENDING = new PendingNativeDubboInvocations();
     private static AsyncConfig asyncConfig;
@@ -26,12 +26,29 @@ public final class NativeDubboBridge {
             int maxResponseBytes,
             int maxConnectionsPerEndpoint,
             int maxIdleConnectionsPerEndpoint) {
-        int id = nativeCreateClientWithIdleLimit(
+        return createClient(
                 timeoutMs,
                 maxInflight,
                 maxResponseBytes,
                 maxConnectionsPerEndpoint,
-                maxIdleConnectionsPerEndpoint);
+                maxIdleConnectionsPerEndpoint,
+                DubboConsumerConfig.DEFAULT_NATIVE_IDLE_CONNECTION_TTL_MS);
+    }
+
+    public static int createClient(
+            int timeoutMs,
+            int maxInflight,
+            int maxResponseBytes,
+            int maxConnectionsPerEndpoint,
+            int maxIdleConnectionsPerEndpoint,
+            int idleConnectionTtlMs) {
+        int id = nativeCreateClientWithIdlePolicy(
+                timeoutMs,
+                maxInflight,
+                maxResponseBytes,
+                maxConnectionsPerEndpoint,
+                maxIdleConnectionsPerEndpoint,
+                idleConnectionTtlMs);
         if (id <= 0) {
             throw new DubboConsumerException("Failed to create native Dubbo client");
         }
@@ -344,6 +361,14 @@ public final class NativeDubboBridge {
             int maxResponseBytes,
             int maxConnectionsPerEndpoint,
             int maxIdleConnectionsPerEndpoint);
+
+    private static native int nativeCreateClientWithIdlePolicy(
+            int timeoutMs,
+            int maxInflight,
+            int maxResponseBytes,
+            int maxConnectionsPerEndpoint,
+            int maxIdleConnectionsPerEndpoint,
+            int idleConnectionTtlMs);
 
     private static native int nativeUpdateProviders(int clientId, String providers);
 

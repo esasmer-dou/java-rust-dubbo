@@ -12,9 +12,10 @@ Kullanım modeli basittir:
 - İsterseniz Dubbo TCP data-plane Rust tarafında çalışır; böylece consumer JVM daha küçük kalır.
 - ZooKeeper, Netty ve resmi Dubbo client stack varsayılan olarak zorunlu değildir.
 
-Güncel uyumlu sürüm çizgisi `java-rust-dubbo:0.4.0` ve `rust-java-rest:3.4.0` şeklindedir. Bu sürüm,
-native thread stack bütçesini sınırlar. Ayrıca her native client yalnızca seçilen `blocking` veya
-`tokio-demux` transport kaynaklarını açar.
+Güncel uyumlu sürüm çizgisi `java-rust-dubbo:0.4.1` ve `rust-java-rest:3.4.1` şeklindedir. Bu sürüm,
+provider executor kapasitesini sınırlar. Provider yeniden başladığında eski native bağlantının
+yeniden kullanılmasını da güvenli biçimde engeller. Native thread stack bütçesi ve yalnızca seçilen
+`blocking` veya `tokio-demux` transport kaynaklarının açılması davranışı korunur.
 
 Bu kütüphane, "dependency ekleyince her şeyi otomatik yapsın" yaklaşımından bilinçli olarak uzak durur. Kurulum açık ve kontrollüdür. Bunun nedeni memory, thread ve latency davranışını üretim ortamında daha öngörülebilir yönetmektir.
 
@@ -40,7 +41,7 @@ Bu kütüphane, "dependency ekleyince her şeyi otomatik yapsın" yaklaşımınd
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.4.0</version>
+  <version>0.4.1</version>
 </dependency>
 ```
 
@@ -86,7 +87,7 @@ En küçük static-provider native kurulum için full JAR yerine `native-static`
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.4.0</version>
+  <version>0.4.1</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -102,8 +103,8 @@ ZooKeeper discovery, argümanlı Dubbo metotları, DTO decode, official Dubbo uy
 
 Native modun çalışması için Java/Rust framework native library de yüklü olmalıdır. `rust-java-rest` içinde bu native library framework tarafından yüklenir. Standalone testlerde `rust_hyper` kütüphanesini `java.library.path` ile görünür hale getirmek gerekir.
 
-Native Dubbo transport, Dubbo native ABI `6` gerektirir. Uyumlu `rust-java-rest:3.4.0` runtime REST
-ABI `24`, Dubbo ABI `6` ve Redis ABI `6` raporlar. Framework startup sırasında paketlenen kaynak
+Native Dubbo transport, Dubbo native ABI `7` gerektirir. Uyumlu `rust-java-rest:3.4.1` runtime REST
+ABI `24`, Dubbo ABI `7` ve Redis ABI `6` raporlar. Framework startup sırasında paketlenen kaynak
 revision ve platform hash bilgisini doğrular. `NativeDubboBridge` de ilk native client oluşturulmadan
 önce Dubbo ABI kontrolü yapar. Eski framework release'inden alınan DLL/SO dosyasını yeni image içine
 kopyalamayın.
@@ -188,6 +189,24 @@ Uygulama servisi ve kaynağı tanımlar. Library; export, registry kaydı, başl
 low-RSS provider varsayılanları, shutdown hook ve kaynakları ters sırada kapatma işlerini yönetir.
 Builder, yalnızca standart dışı embedded lifecycle ihtiyacı için kullanılmalıdır.
 
+Deklaratif provider ayrıca sınırlı bir Dubbo/Netty executor kullanır. Aşağıdaki property'ler server
+başlamadan önce export edilen Dubbo URL'sine yazılır:
+
+```properties
+dubbo.provider.executor.thread-pool=eager
+dubbo.provider.executor.core-threads=1
+dubbo.provider.executor.max-threads=8
+dubbo.provider.executor.queue-capacity=16
+dubbo.provider.executor.idle-timeout-ms=30000
+dubbo.provider.executor.io-threads=1
+```
+
+Bu ayarlar küçük podlarda Dubbo'nun varsayılan `200` handler-thread üst sınırını kullanmayı önler.
+Sınırlı olmadığı için `cached` kabul edilmez. Altı parametreli `ProviderConfig` constructor'ını
+doğrudan kullanan eski kod Dubbo varsayılanlarını korur. `DubboProviderSupport` ve
+`DubboProviderApplication` ise yukarıdaki sınırlı ayarları uygular. Thread, RSS, p99 ve reject
+ölçümü olmadan değerleri artırmayın.
+
 BEST: Servis listesini açık tutun. Sadece tekrar eden lifecycle kodunu helper sınıflara taşıyın.
 ANTI-PATTERN: Classpath'teki her interface'i otomatik export eden gizli scanner eklemeyin.
 
@@ -222,6 +241,8 @@ reactor.dubbo.retries=0
 reactor.dubbo.max-inflight=32
 reactor.dubbo.max-response-bytes=8388608
 reactor.dubbo.native-connections-per-endpoint=1
+reactor.dubbo.native-max-idle-connections-per-endpoint=1
+reactor.dubbo.native-idle-connection-ttl-ms=30000
 reactor.dubbo.native-async-workers=1
 reactor.dubbo.native-async-queue-capacity=32
 ```
@@ -453,11 +474,13 @@ REACTOR_DUBBO_NATIVE_ASYNC_WORKERS=8
 
 | Property | Varsayılan | Ne İşe Yarar? | Ne Zaman Değiştirilir? |
 | --- | ---: | --- | --- |
-| `reactor.dubbo.max-inflight` | `256` | Aynı anda devam eden native Dubbo çağrı limitidir. | Düşük RSS için azaltın. Provider kapasitesi yüksekse ve testlerle doğrulandıysa artırın. |
+| `reactor.dubbo.max-inflight` | `32` | Aynı anda devam eden native Dubbo çağrı limitidir. | Düşük RSS için azaltın. Provider kapasitesi yüksekse ve testlerle doğrulandıysa artırın. |
 | `reactor.dubbo.max-response-bytes` | `8388608` | Native Dubbo response frame için maksimum boyuttur. | Provider daha büyük response döndürüyorsa artırın. Gereksiz büyütmek RSS riskidir. |
-| `reactor.dubbo.native-connections-per-endpoint` | `16` | Her provider endpoint için Rust keepalive TCP connection limitidir. | Low-RSS için `2`. Balanced kullanım için `16` iyi başlangıçtır. |
-| `reactor.dubbo.native-async-workers` | `2` | Async Dubbo çağrı işleyici worker sayısıdır. | Low-RSS için küçük tutun. Throughput için benchmark ile artırın. |
-| `reactor.dubbo.native-async-queue-capacity` | `128` | Async çağrı queue limitidir. Doluysa çağrı fail-fast olur. | Her zaman bounded kalsın. Worker ve route bulkhead ile birlikte ayarlayın. |
+| `reactor.dubbo.native-connections-per-endpoint` | `1` | Her provider endpoint için Rust keepalive TCP connection limitidir. | Ölçülmüş iki kanallı DB write yolu için `2` kullanın. Daha yüksek değerleri yalnız provider kapasite testi sonrası seçin. |
+| `reactor.dubbo.native-max-idle-connections-per-endpoint` | `1` | Endpoint başına tekrar kullanılmak üzere tutulacak tamamlanmış connection sayısını sınırlar. | `native-connections-per-endpoint` değerinden büyük vermeyin. Idle RSS önemliyse düşük tutun. |
+| `reactor.dubbo.native-idle-connection-ttl-ms` | `30000` | Bu süreden uzun idle kalan pooled connection'ı yeniden kullanmadan önce kapatır. Yeni çağrı yeni connection ile başlar. | Provider idle connection'ı daha erken kapatıyorsa provider timeout değerinden daha küçük bir değer seçin. Geçerli aralık: `1000..3600000`. |
+| `reactor.dubbo.native-async-workers` | `1` | Async Dubbo çağrı işleyici worker sayısıdır. | Low-RSS için küçük tutun. Connection sayısıyla birlikte yalnız benchmark sonrası artırın. |
+| `reactor.dubbo.native-async-queue-capacity` | `32` | Async çağrı queue limitidir. Doluysa çağrı fail-fast olur. | Her zaman bounded kalsın. Worker ve route bulkhead ile birlikte ayarlayın. |
 | `reactor.dubbo.native-async-transport` | `blocking` | Async çalışma modelidir. `blocking` en küçük worker modelini kullanır; `tokio-demux` provider connection üzerinde Rust async request-id demux kullanır. | En düşük RSS ve düşük trafik için `blocking`. Read-heavy/yüksek concurrency için Docker RSS + p99 gate geçerse `tokio-demux`. |
 | `reactor.dubbo.native-thread-stack-bytes` | `262144` | Native Dubbo worker ve Tokio thread stack boyutudur. Geçerli aralık: `131072..8388608`. | Memory-first profilde `262144` kalsın. Yalnız stack overflow kanıtı varsa artırın. Düşürürseniz tüm route smoke testlerini çalıştırın. |
 
@@ -466,6 +489,12 @@ pool'larını açar. Async endpoint pool açmaz. `tokio-demux` yalnız async end
 senkron Java facade da aynı Tokio runtime üzerinden çalışır. Bu durumu
 `nativeDubboBlockingEndpointPools` ve `nativeDubboAsyncEndpointPools` metrikleriyle doğrulayın.
 Overload'u saklamak için iki kaynak modelini birlikte açmayın.
+
+Blocking transport, en az 100 ms idle kalan connection'ı yeniden kullanmadan önce kontrol eder.
+Provider tarafından kapatılmış socket request başlamadan havuzdan çıkarılır. Request byte'larının
+gönderilmiş olabileceği bir write çağrısı kör şekilde retry edilmez. Provider restart testlerinde
+`nativeDubboIdleConnectionsExpired`, `nativeDubboIdleConnectionValidations`,
+`nativeDubboStaleIdleConnectionsDiscarded` ve `nativeDubboStaleConnectionRetries` metriklerini izleyin.
 
 ### ZooKeeper ve Official Mode Ayarları
 
@@ -476,7 +505,7 @@ Overload'u saklamak için iki kaynak modelini birlikte açmayın.
 | `reactor.dubbo.connections` | `1` | Official mode connection ayarıdır. Native modda `native-connections-per-endpoint` kullanılır. | Official mode kullanıyorsanız ayarlayın. |
 | `reactor.dubbo.share-connections` | `1` | Official mode shared connection ayarıdır. | Official mode için anlamlıdır. |
 | `reactor.dubbo.refer-thread-num` | `1` | ZooKeeper provider refresh worker sayısıdır. Request worker değildir. | Çok sayıda reference aynı anda refresh oluyorsa artırılabilir. |
-| `reactor.dubbo.runtime-profile` | `low-rss` | Host uygulamanın okuyabileceği profil bilgisidir. | `low-rss`, `balanced-dubbo`, `throughput`, `default` değerlerinden birini kullanın. |
+| `reactor.dubbo.runtime-profile` | `micro-dubbo` | Host uygulamanın okuyabileceği profil bilgisidir. | Ölçülmüş ihtiyacınıza göre `micro-dubbo` veya `balanced-dubbo` kullanın. |
 
 ## Başlangıç Profilleri
 
@@ -489,6 +518,7 @@ reactor.dubbo.retries=0
 reactor.dubbo.timeout-ms=800
 reactor.dubbo.max-inflight=64
 reactor.dubbo.native-connections-per-endpoint=2
+reactor.dubbo.native-idle-connection-ttl-ms=30000
 reactor.dubbo.native-async-workers=2
 reactor.dubbo.native-async-queue-capacity=64
 ```
@@ -539,8 +569,8 @@ mvn clean verify
 
 Üretilen paketler:
 
-- `target/java-rust-dubbo-0.4.0.jar`
-- `target/java-rust-dubbo-0.4.0-native-static.jar`
-- `target/java-rust-dubbo-0.4.0-sources.jar`
+- `target/java-rust-dubbo-0.4.1.jar`
+- `target/java-rust-dubbo-0.4.1-native-static.jar`
+- `target/java-rust-dubbo-0.4.1-sources.jar`
 
-Sürüm ayrıntıları: [java-rust-dubbo 0.4.0](docs/RELEASE_NOTES_v0.4.0.md).
+Sürüm ayrıntıları: [java-rust-dubbo 0.4.1](docs/RELEASE_NOTES_v0.4.1.md).
