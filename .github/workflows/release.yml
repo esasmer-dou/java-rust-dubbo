@@ -67,6 +67,7 @@ jobs:
           mkdir -p release-assets
           cp "target/java-rust-dubbo-${VERSION}.jar" release-assets/
           cp "target/java-rust-dubbo-${VERSION}-native-static.jar" release-assets/
+          cp "target/java-rust-dubbo-${VERSION}-codegen.jar" release-assets/
           cp "target/java-rust-dubbo-${VERSION}-sources.jar" release-assets/
           (cd release-assets && sha256sum * > SHA256SUMS)
 

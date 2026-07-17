@@ -13,10 +13,10 @@ The library keeps the programming model simple:
 - Dubbo calls can use a Rust native transport for lower JVM RSS.
 - ZooKeeper and the official Dubbo/Netty client stack are optional, not default requirements.
 
-The current aligned release is `java-rust-dubbo:0.4.1` with `rust-java-rest:3.4.1`. It adds bounded
-provider executor sizing and safe idle native connection reuse across provider restarts. The
-bounded native thread stack and exclusive `blocking` or `tokio-demux` transport planes remain in
-place.
+The current aligned release is `java-rust-dubbo:0.5.0` with `rust-java-rest:4.0.0`. It adds
+build-time generated native clients, declarative provider bindings, and a reusable bounded read
+retry policy. Existing bounded native thread stacks, provider restart handling, and the exclusive
+`blocking` or `tokio-demux` transport planes remain in place.
 
 ## When To Use It
 
@@ -36,7 +36,7 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.4.1</version>
+  <version>0.5.0</version>
 </dependency>
 ```
 
@@ -82,7 +82,7 @@ For the smallest static-provider native setup, use the `native-static` classifie
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.4.1</version>
+  <version>0.5.0</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -98,7 +98,7 @@ If you need ZooKeeper discovery, argument-bearing Dubbo methods, DTO decoding, o
 
 The Java/Rust framework native library must also be present. In `rust-java-rest`, the framework loads that native library for you. In standalone tests, make sure `rust_hyper` is available through `java.library.path`.
 
-Native Dubbo transport requires Dubbo native ABI `7`. The aligned `rust-java-rest:3.4.1` runtime
+Native Dubbo transport requires Dubbo native ABI `7`. The aligned `rust-java-rest:4.0.0` runtime
 reports REST ABI `24`, Dubbo ABI `7`, and Redis ABI `6`. Framework startup verifies the packaged
 source revision and platform hash; `NativeDubboBridge` also checks the Dubbo ABI before the first
 native client is created. Do not copy a DLL/SO from an older framework release into a newer image.
@@ -116,6 +116,7 @@ Common consumer classes:
 - `NativeDubboConsumers`
 - `NativeDubboMethodInvoker`
 - `DubboConsumerSupport`
+- `com.reactor.rust.dubbo.codegen.GenerateNativeDubboClient` from the build-only `codegen` classifier
 
 Common provider classes:
 
@@ -123,6 +124,7 @@ Common provider classes:
 - `DubboProviderApplication`
 - `DubboProviderRuntimeTuning`
 - `DubboProviderSupport`
+- `DubboServiceBinding`
 - `PlainDubboProvider`
 - `ZookeeperDubboProviderRegistration`
 - `com.reactor.rust.dubbo.provider.jdbc.JdbcRepository`
@@ -145,16 +147,26 @@ code. They do not discover business services automatically. Configuration select
 runtime surface, while your code still lists every provider interface and consumer adapter
 explicitly.
 
-Consumer example:
+Recommended consumer example:
 
 ```java
-DubboConsumerSupport support = DubboConsumerSupport
-        .fromProperties(PropertiesLoader.getAll())
-        .discoveryProperty("sample.dubbo.discovery");
-
-NativeDubboConsumerClient client = NativeDubboConsumers.create(support.config());
-DubboReferenceSpec<CatalogService> spec = support.reference(CatalogService.class);
+@GenerateNativeDubboClient(
+        service = CatalogService.class,
+        generatedName = "CatalogClient",
+        retryReads = true,
+        retryProperty = "catalog.read-retry-on-io-error",
+        exposeMetrics = true)
+final class CatalogClientDefinition {
+    private CatalogClientDefinition() {}
+}
 ```
+
+The annotation processor generates `CatalogClient.create(client, support)` and one exact async
+method per Dubbo interface method. A `byte[]` return also gets a `...NativeJsonAsync()` method that
+can keep the response body in Rust native memory. Method descriptors, return types, group, version,
+retry policy, and optional metrics access are fixed at build time. The generated wrapper does not use
+the dynamic proxy path. `NativeDubboConsumerClient` resolves each Java interface `Method` once while
+the client is created; request handling does not use proxy dispatch, method-name lookup, or reflection.
 
 Provider example:
 
@@ -175,7 +187,9 @@ The named module contains only the explicit resource and service plan:
 public void configure(DubboProviderApplication.ModuleContext context) {
     CatalogRepository repository = context.manage(
             CatalogRepository.fromProperties(context.properties()));
-    context.service(CatalogService.class, new CatalogServiceImpl(repository));
+    context.services(
+            service(CatalogService.class, new CatalogServiceImpl(repository)),
+            service(CustomerQueryService.class, new CustomerQueryServiceImpl(repository)));
 }
 ```
 
@@ -202,6 +216,10 @@ bounded configuration above. Override it only with thread, RSS, p99, and rejecti
 
 BEST: keep the service list explicit and move only duplicated lifecycle code to these helpers.
 ANTI-PATTERN: adding an automatic provider scanner that exports every interface on the classpath.
+
+`DubboServiceBinding.service(...)` is startup metadata only. It validates that the implementation
+matches the interface and registers the explicit list before Dubbo starts. It does not add a wrapper,
+lookup, allocation, or dispatch layer to a provider invocation.
 
 Provider-side DB helpers are optional. Use them when a plain Dubbo provider needs the same
 low-boilerplate JDBC/Hikari lifecycle pattern as the sample provider. They do not generate SQL and
@@ -301,7 +319,77 @@ public CompletableFuture<ResponseEntity<RawResponse>> catalog() {
 
 This keeps the provider JSON body in Rust native memory and sends only a small response id through Java. Use the older `invokeAsync().thenApply(bytes -> RawResponse.json(bytes))` path when the Java handler must inspect, transform, validate, or log the response bytes.
 
-### 4. Create One Native Consumer Client At Startup
+### 4. Generate The Native Client At Build Time (Recommended)
+
+Add the small build-only classifier to the consuming application. `provided` keeps it out of the
+runtime dependency surface:
+
+```xml
+<dependency>
+  <groupId>com.reactor</groupId>
+  <artifactId>java-rust-dubbo</artifactId>
+  <version>0.5.0</version>
+  <classifier>codegen</classifier>
+  <scope>provided</scope>
+</dependency>
+```
+
+Register the processor in `maven-compiler-plugin`:
+
+```xml
+<annotationProcessorPaths>
+  <path>
+    <groupId>com.reactor</groupId>
+    <artifactId>java-rust-dubbo</artifactId>
+    <version>0.5.0</version>
+    <classifier>codegen</classifier>
+  </path>
+</annotationProcessorPaths>
+<annotationProcessors>
+  <annotationProcessor>com.reactor.rust.dubbo.codegen.NativeDubboClientProcessor</annotationProcessor>
+</annotationProcessors>
+```
+
+Declare the contract once:
+
+```java
+@GenerateNativeDubboClient(
+        service = CatalogProviderApi.class,
+        generatedName = "CatalogClient",
+        retryReads = true,
+        retryProperty = "catalog.read-retry-on-io-error",
+        exposeMetrics = true,
+        group = "catalog",
+        version = "1.0.0")
+final class CatalogClientDefinition {
+    private CatalogClientDefinition() {}
+}
+```
+
+Create the generated client once during startup:
+
+```java
+DubboConsumerSupport support = DubboConsumerSupport
+        .fromProperties(PropertiesLoader.getAll());
+NativeDubboConsumerClient transport = NativeDubboConsumers.create(support.config());
+CatalogClient catalog = CatalogClient.create(transport, support);
+```
+
+The generated class exposes exact methods such as `nestedCatalogJsonAsync()` and, for a `byte[]`
+result, `nestedCatalogJsonNativeJsonAsync()`. The latter returns `NativeResponseHandle` and avoids
+materializing the provider JSON body as a Java `byte[]` when the REST endpoint only passes it through.
+
+BEST: use generation for stable Dubbo interfaces. It removes handwritten descriptor and retry
+boilerplate without adding runtime magic. ACCEPTABLE: use the manual API below for dynamic or unusual
+embedded integrations. ANTI-PATTERN: create a reflective proxy or resolve method descriptors on every
+request.
+
+The generator includes methods inherited from parent interfaces. Contract validation also runs at
+build time. Overloaded methods, `void` methods, generic service interfaces, and unresolved generic
+method types are rejected with a compiler error. Keep the Dubbo transport contract explicit and
+non-generic; use concrete records, primitives, strings, collections, or `byte[]` payloads.
+
+### 5. Manual Client Wiring (Supported Alternative)
 
 Create the consumer once and reuse it. Do not create a Dubbo client per request.
 
@@ -349,7 +437,7 @@ Important points:
 - The method invoker is created once and reused.
 - `client.close()` releases native clients, connections, and watcher resources.
 
-### 5. Wrap The Invoker In A Java Client
+### 6. Wrap The Invoker In A Java Client
 
 This wrapper keeps the rest of your application clean. Your handlers and services do not need to know about Dubbo internals.
 
@@ -384,7 +472,7 @@ Use `invoke()` for simple synchronous service code.
 
 Use `invokeAsync()` when your REST framework handler can return `CompletionStage`. That keeps request workers from waiting on the Dubbo response.
 
-### 6. Use It From A Handler Or Service
+### 7. Use It From A Handler Or Service
 
 Example with a raw JSON response:
 
@@ -568,12 +656,13 @@ mvn clean verify
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-0.4.1.jar`
-- `java-rust-dubbo-0.4.1-native-static.jar`
-- `java-rust-dubbo-0.4.1-sources.jar`
+- `java-rust-dubbo-0.5.0.jar`
+- `java-rust-dubbo-0.5.0-native-static.jar`
+- `java-rust-dubbo-0.5.0-codegen.jar` (build time only)
+- `java-rust-dubbo-0.5.0-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v0.4.1.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.5.0.md)
 - [Turkish README](README.tr.md)

@@ -85,6 +85,18 @@ public final class DubboProviderApplication {
             return this;
         }
 
+        public ModuleContext services(DubboServiceBinding<?>... bindings) {
+            Objects.requireNonNull(bindings, "bindings");
+            for (DubboServiceBinding<?> binding : bindings) {
+                register(Objects.requireNonNull(binding, "binding"));
+            }
+            return this;
+        }
+
+        private <T> void register(DubboServiceBinding<T> binding) {
+            builder.service(binding.serviceType(), binding.implementation());
+        }
+
         public ModuleContext onStart(StartupAction action) {
             builder.onStart(action);
             return this;
