@@ -12,9 +12,9 @@ Kullanım modeli basittir:
 - İsterseniz Dubbo TCP data-plane Rust tarafında çalışır; böylece consumer JVM daha küçük kalır.
 - ZooKeeper, Netty ve resmi Dubbo client stack varsayılan olarak zorunlu değildir.
 
-Güncel uyumlu sürüm çizgisi `java-rust-dubbo:0.5.0` ve `rust-java-rest:4.0.0` şeklindedir. Bu sürüm,
-provider executor kapasitesini sınırlar. Provider yeniden başladığında eski native bağlantının
-yeniden kullanılmasını da güvenli biçimde engeller. Native thread stack bütçesi ve yalnızca seçilen
+Güncel uyumlu sürüm çizgisi `java-rust-dubbo:0.6.0` ve `rust-java-rest:4.1.0` şeklindedir. Birden
+fazla Dubbo interface'i tek bir deklaratif client seti içinde tanımlayabilirsiniz. Generated client
+bean'leri aynı bounded transport lifecycle'ı paylaşır. Provider restart güvenliği ve yalnız seçilen
 `blocking` veya `tokio-demux` transport kaynaklarının açılması davranışı korunur.
 
 Bu kütüphane, "dependency ekleyince her şeyi otomatik yapsın" yaklaşımından bilinçli olarak uzak durur. Kurulum açık ve kontrollüdür. Bunun nedeni memory, thread ve latency davranışını üretim ortamında daha öngörülebilir yönetmektir.
@@ -41,7 +41,7 @@ Bu kütüphane, "dependency ekleyince her şeyi otomatik yapsın" yaklaşımınd
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
 </dependency>
 ```
 
@@ -87,7 +87,7 @@ En küçük static-provider native kurulum için full JAR yerine `native-static`
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -103,7 +103,7 @@ ZooKeeper discovery, argümanlı Dubbo metotları, DTO decode, official Dubbo uy
 
 Native modun çalışması için Java/Rust framework native library de yüklü olmalıdır. `rust-java-rest` içinde bu native library framework tarafından yüklenir. Standalone testlerde `rust_hyper` kütüphanesini `java.library.path` ile görünür hale getirmek gerekir.
 
-Native Dubbo transport, Dubbo native ABI `7` gerektirir. Uyumlu `rust-java-rest:4.0.0` runtime REST
+Native Dubbo transport, Dubbo native ABI `7` gerektirir. Uyumlu `rust-java-rest:4.1.0` runtime REST
 ABI `24`, Dubbo ABI `7` ve Redis ABI `6` raporlar. Framework startup sırasında paketlenen kaynak
 revision ve platform hash bilgisini doğrular. `NativeDubboBridge` de ilk native client oluşturulmadan
 önce Dubbo ABI kontrolü yapar. Eski framework release'inden alınan DLL/SO dosyasını yeni image içine
@@ -323,31 +323,32 @@ runtime dependency yüzeyine girmesini önler:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
   <classifier>codegen</classifier>
   <scope>provided</scope>
 </dependency>
 ```
 
-Processor'ı `maven-compiler-plugin` içinde tanımlayın:
+Build-only classifier'ı `annotationProcessorPaths` içine ekleyin:
 
 ```xml
 <annotationProcessorPaths>
   <path>
     <groupId>com.reactor</groupId>
     <artifactId>java-rust-dubbo</artifactId>
-    <version>0.5.0</version>
+    <version>0.6.0</version>
     <classifier>codegen</classifier>
   </path>
 </annotationProcessorPaths>
-<annotationProcessors>
-  <annotationProcessor>com.reactor.rust.dubbo.codegen.NativeDubboClientProcessor</annotationProcessor>
-</annotationProcessors>
 ```
+
+Codegen JAR processor'ı otomatik bulur. Processor sınıfları ve service metadata production JAR'a
+girmez.
 
 Kontratı bir kez tanımlayın:
 
 ```java
+@EnableNativeDubboClients(discoveryProperty = "app.dubbo.discovery")
 @GenerateNativeDubboClient(
         service = CatalogProviderApi.class,
         generatedName = "CatalogClient",
@@ -356,19 +357,33 @@ Kontratı bir kez tanımlayın:
         exposeMetrics = true,
         group = "catalog",
         version = "1.0.0")
-final class CatalogClientDefinition {
-    private CatalogClientDefinition() {}
+@GenerateNativeDubboClient(
+        service = CustomerProviderApi.class,
+        generatedName = "CustomerClient")
+final class DubboClients {
+    private DubboClients() {}
 }
 ```
 
-Üretilen client'i startup sırasında bir kez oluşturun:
+Generated client'i handler constructor'ına alın:
 
 ```java
-DubboConsumerSupport support = DubboConsumerSupport
-        .fromProperties(PropertiesLoader.getAll());
-NativeDubboConsumerClient transport = NativeDubboConsumers.create(support.config());
-CatalogClient catalog = CatalogClient.create(transport, support);
+@RestController("/api/v1/catalog")
+final class CatalogHandler {
+    private final CatalogClient catalog;
+
+    CatalogHandler(CatalogClient catalog) {
+        this.catalog = catalog;
+    }
+}
 ```
+
+`@EnableNativeDubboClients`, tek bir bounded transport lifecycle ve her interface için bir client bean
+üretir. `@GenerateNativeDubboClient` annotation'ını tekrarlamak, interface başına yeni transport
+oluşturmaz.
+Bu annotation'ı en az bir `@GenerateNativeDubboClient` tanımıyla birlikte kullanın. Client kontratı
+yoksa veya generated configuration adı geçerli bir Java identifier değilse build açık bir hata ile
+durur.
 
 Üretilen sınıfta `nestedCatalogJsonAsync()` gibi doğrudan metotlar bulunur. Dönüş tipi `byte[]` ise
 `nestedCatalogJsonNativeJsonAsync()` metodu da oluşur. Bu metot `NativeResponseHandle` döner. REST
@@ -658,9 +673,9 @@ mvn clean verify
 
 Üretilen paketler:
 
-- `target/java-rust-dubbo-0.5.0.jar`
-- `target/java-rust-dubbo-0.5.0-native-static.jar`
-- `target/java-rust-dubbo-0.5.0-codegen.jar` (yalnızca derleme sırasında kullanılır)
-- `target/java-rust-dubbo-0.5.0-sources.jar`
+- `target/java-rust-dubbo-0.6.0.jar`
+- `target/java-rust-dubbo-0.6.0-native-static.jar`
+- `target/java-rust-dubbo-0.6.0-codegen.jar` (yalnızca derleme sırasında kullanılır)
+- `target/java-rust-dubbo-0.6.0-sources.jar`
 
-Sürüm ayrıntıları: [java-rust-dubbo 0.5.0](docs/RELEASE_NOTES_v0.5.0.md).
+Sürüm ayrıntıları: [java-rust-dubbo 0.6.0](docs/RELEASE_NOTES_v0.6.0.md).

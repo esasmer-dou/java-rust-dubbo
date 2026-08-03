@@ -142,4 +142,90 @@ class NativeDubboClientProcessorTest {
                 .anyMatch(diagnostic -> diagnostic.getMessage(null)
                         .contains("generic service interfaces are not supported")));
     }
+
+    @Test
+    void generatesMultipleClientsFromOneDeclarativeDefinition() throws Exception {
+        Path sourceDir = Files.createDirectories(tempDir.resolve("repeatable-src/generated/fixture"));
+        Path generatedDir = Files.createDirectories(tempDir.resolve("repeatable-generated"));
+        Path classesDir = Files.createDirectories(tempDir.resolve("repeatable-classes"));
+        Path source = sourceDir.resolve("Clients.java");
+        Files.writeString(source, """
+                package generated.fixture;
+
+                import com.reactor.rust.dubbo.codegen.EnableNativeDubboClients;
+                import com.reactor.rust.dubbo.codegen.GenerateNativeDubboClient;
+
+                @EnableNativeDubboClients(discoveryProperty = "sample.discovery")
+                @GenerateNativeDubboClient(service = Clients.CatalogService.class)
+                @GenerateNativeDubboClient(service = Clients.CustomerService.class)
+                public final class Clients {
+                    public interface CatalogService { byte[] catalog(); }
+                    public interface CustomerService { boolean exists(long id); }
+                }
+                """, StandardCharsets.UTF_8);
+
+        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        try (StandardJavaFileManager files = compiler.getStandardFileManager(null, null, StandardCharsets.UTF_8)) {
+            JavaCompiler.CompilationTask task = compiler.getTask(
+                    null,
+                    files,
+                    null,
+                    List.of(
+                            "--release", "21",
+                            "-proc:only",
+                            "-classpath", System.getProperty("java.class.path"),
+                            "-d", classesDir.toString(),
+                            "-s", generatedDir.toString()),
+                    null,
+                    files.getJavaFileObjects(source.toFile()));
+            task.setProcessors(List.of(new NativeDubboClientProcessor()));
+            assertTrue(task.call());
+        }
+
+        assertTrue(Files.exists(generatedDir.resolve("generated/fixture/CatalogServiceClient.java")));
+        assertTrue(Files.exists(generatedDir.resolve("generated/fixture/CustomerServiceClient.java")));
+        String configuration = Files.readString(
+                generatedDir.resolve("generated/fixture/Clients__DubboConfiguration.java"));
+        assertTrue(configuration.contains(".discoveryProperty(\"sample.discovery\")"));
+        assertTrue(configuration.contains("CatalogServiceClient.create(client, support)"));
+        assertTrue(configuration.contains("CustomerServiceClient.create(client, support)"));
+    }
+
+    @Test
+    void rejectsLifecycleWithoutAnyClientDeclaration() throws Exception {
+        Path sourceDir = Files.createDirectories(tempDir.resolve("empty-src/generated/fixture"));
+        Path generatedDir = Files.createDirectories(tempDir.resolve("empty-generated"));
+        Path classesDir = Files.createDirectories(tempDir.resolve("empty-classes"));
+        Path source = sourceDir.resolve("Clients.java");
+        Files.writeString(source, """
+                package generated.fixture;
+                import com.reactor.rust.dubbo.codegen.EnableNativeDubboClients;
+                @EnableNativeDubboClients
+                public final class Clients {}
+                """, StandardCharsets.UTF_8);
+
+        DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
+        JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+        try (StandardJavaFileManager files = compiler.getStandardFileManager(
+                diagnostics, null, StandardCharsets.UTF_8)) {
+            JavaCompiler.CompilationTask task = compiler.getTask(
+                    null,
+                    files,
+                    diagnostics,
+                    List.of(
+                            "--release", "21",
+                            "-proc:only",
+                            "-classpath", System.getProperty("java.class.path"),
+                            "-d", classesDir.toString(),
+                            "-s", generatedDir.toString()),
+                    null,
+                    files.getJavaFileObjects(source.toFile()));
+            task.setProcessors(List.of(new NativeDubboClientProcessor()));
+            assertFalse(task.call());
+        }
+
+        assertTrue(diagnostics.getDiagnostics().stream()
+                .anyMatch(diagnostic -> diagnostic.getMessage(null)
+                        .contains("requires at least one @GenerateNativeDubboClient")));
+    }
 }

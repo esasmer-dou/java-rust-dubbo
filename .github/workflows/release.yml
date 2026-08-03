@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version, for example 0.3.0"
+        description: "Release version, for example 0.6.0"
         required: true
         type: string
 
@@ -46,6 +46,16 @@ jobs:
           server-id: github
           server-username: GITHUB_ACTOR
           server-password: GITHUB_TOKEN
+
+      - name: Checkout aligned rust-java-rest
+        uses: actions/checkout@v4
+        with:
+          repository: esasmer-dou/rust-java-rest
+          ref: v4.1.0
+          path: rust-java-rest-dependency
+
+      - name: Install aligned rust-java-rest locally
+        run: mvn -B -ntp -f rust-java-rest-dependency/pom.xml -DskipTests install
 
       - name: Test
         run: mvn -B test

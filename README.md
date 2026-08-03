@@ -13,9 +13,9 @@ The library keeps the programming model simple:
 - Dubbo calls can use a Rust native transport for lower JVM RSS.
 - ZooKeeper and the official Dubbo/Netty client stack are optional, not default requirements.
 
-The current aligned release is `java-rust-dubbo:0.5.0` with `rust-java-rest:4.0.0`. It adds
-build-time generated native clients, declarative provider bindings, and a reusable bounded read
-retry policy. Existing bounded native thread stacks, provider restart handling, and the exclusive
+The current aligned release is `java-rust-dubbo:0.6.0` with `rust-java-rest:4.1.0`. It adds one
+declarative client set, one shared bounded transport lifecycle, repeatable generated client
+declarations, and build-time validation. Existing provider restart handling and the exclusive
 `blocking` or `tokio-demux` transport planes remain in place.
 
 ## When To Use It
@@ -36,7 +36,7 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
 </dependency>
 ```
 
@@ -82,7 +82,7 @@ For the smallest static-provider native setup, use the `native-static` classifie
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -98,7 +98,7 @@ If you need ZooKeeper discovery, argument-bearing Dubbo methods, DTO decoding, o
 
 The Java/Rust framework native library must also be present. In `rust-java-rest`, the framework loads that native library for you. In standalone tests, make sure `rust_hyper` is available through `java.library.path`.
 
-Native Dubbo transport requires Dubbo native ABI `7`. The aligned `rust-java-rest:4.0.0` runtime
+Native Dubbo transport requires Dubbo native ABI `7`. The aligned `rust-java-rest:4.1.0` runtime
 reports REST ABI `24`, Dubbo ABI `7`, and Redis ABI `6`. Framework startup verifies the packaged
 source revision and platform hash; `NativeDubboBridge` also checks the Dubbo ABI before the first
 native client is created. Do not copy a DLL/SO from an older framework release into a newer image.
@@ -328,31 +328,32 @@ runtime dependency surface:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
   <classifier>codegen</classifier>
   <scope>provided</scope>
 </dependency>
 ```
 
-Register the processor in `maven-compiler-plugin`:
+Add the build-only classifier to `annotationProcessorPaths`:
 
 ```xml
 <annotationProcessorPaths>
   <path>
     <groupId>com.reactor</groupId>
     <artifactId>java-rust-dubbo</artifactId>
-    <version>0.5.0</version>
+    <version>0.6.0</version>
     <classifier>codegen</classifier>
   </path>
 </annotationProcessorPaths>
-<annotationProcessors>
-  <annotationProcessor>com.reactor.rust.dubbo.codegen.NativeDubboClientProcessor</annotationProcessor>
-</annotationProcessors>
 ```
+
+The codegen JAR discovers its processor automatically. Processor classes and service metadata are not
+present in the production JAR.
 
 Declare the contract once:
 
 ```java
+@EnableNativeDubboClients(discoveryProperty = "app.dubbo.discovery")
 @GenerateNativeDubboClient(
         service = CatalogProviderApi.class,
         generatedName = "CatalogClient",
@@ -361,19 +362,32 @@ Declare the contract once:
         exposeMetrics = true,
         group = "catalog",
         version = "1.0.0")
-final class CatalogClientDefinition {
-    private CatalogClientDefinition() {}
+@GenerateNativeDubboClient(
+        service = CustomerProviderApi.class,
+        generatedName = "CustomerClient")
+final class DubboClients {
+    private DubboClients() {}
 }
 ```
 
-Create the generated client once during startup:
+Inject the generated client into the handler:
 
 ```java
-DubboConsumerSupport support = DubboConsumerSupport
-        .fromProperties(PropertiesLoader.getAll());
-NativeDubboConsumerClient transport = NativeDubboConsumers.create(support.config());
-CatalogClient catalog = CatalogClient.create(transport, support);
+@RestController("/api/v1/catalog")
+final class CatalogHandler {
+    private final CatalogClient catalog;
+
+    CatalogHandler(CatalogClient catalog) {
+        this.catalog = catalog;
+    }
+}
 ```
+
+`@EnableNativeDubboClients` generates one bounded transport lifecycle and one bean for each declared
+client. Repeating `@GenerateNativeDubboClient` does not create one transport per interface.
+Use it together with at least one `@GenerateNativeDubboClient` declaration. The build fails early if
+the enable annotation has no client contract or if a generated configuration name is not a valid
+Java identifier.
 
 The generated class exposes exact methods such as `nestedCatalogJsonAsync()` and, for a `byte[]`
 result, `nestedCatalogJsonNativeJsonAsync()`. The latter returns `NativeResponseHandle` and avoids
@@ -656,13 +670,13 @@ mvn clean verify
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-0.5.0.jar`
-- `java-rust-dubbo-0.5.0-native-static.jar`
-- `java-rust-dubbo-0.5.0-codegen.jar` (build time only)
-- `java-rust-dubbo-0.5.0-sources.jar`
+- `java-rust-dubbo-0.6.0.jar`
+- `java-rust-dubbo-0.6.0-native-static.jar`
+- `java-rust-dubbo-0.6.0-codegen.jar` (build time only)
+- `java-rust-dubbo-0.6.0-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v0.5.0.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.6.0.md)
 - [Turkish README](README.tr.md)

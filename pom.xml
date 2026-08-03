@@ -6,7 +6,7 @@
 
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
   <packaging>jar</packaging>
 
   <name>java-rust-dubbo</name>
@@ -29,6 +29,7 @@
     <zookeeper.version>3.7.2</zookeeper.version>
     <slf4j.version>1.7.35</slf4j.version>
     <hikaricp.version>5.1.0</hikaricp.version>
+    <rust-java-rest.version>4.1.0</rust-java-rest.version>
     <junit.version>5.11.4</junit.version>
   </properties>
 
@@ -48,6 +49,12 @@
   </dependencyManagement>
 
   <dependencies>
+    <dependency>
+      <groupId>com.reactor</groupId>
+      <artifactId>rust-java-rest</artifactId>
+      <version>${rust-java-rest.version}</version>
+      <optional>true</optional>
+    </dependency>
     <dependency>
       <groupId>com.zaxxer</groupId>
       <artifactId>HikariCP</artifactId>
@@ -212,6 +219,24 @@
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>3.3.1</version>
+        <executions>
+          <execution>
+            <id>copy-codegen-services</id>
+            <phase>prepare-package</phase>
+            <goals><goal>copy-resources</goal></goals>
+            <configuration>
+              <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+              <resources>
+                <resource><directory>src/codegen/resources</directory></resource>
+              </resources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.13.0</version>
         <configuration>
@@ -233,6 +258,7 @@
             <configuration>
               <excludes>
                 <exclude>com/reactor/rust/dubbo/codegen/**</exclude>
+                <exclude>META-INF/services/javax.annotation.processing.Processor</exclude>
               </excludes>
             </configuration>
           </execution>
@@ -277,6 +303,7 @@
               <classifier>codegen</classifier>
               <includes>
                 <include>com/reactor/rust/dubbo/codegen/**</include>
+                <include>META-INF/services/javax.annotation.processing.Processor</include>
               </includes>
             </configuration>
           </execution>

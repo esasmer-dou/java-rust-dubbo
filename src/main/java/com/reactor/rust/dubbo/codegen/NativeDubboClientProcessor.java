@@ -32,31 +32,58 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 @SupportedSourceVersion(SourceVersion.RELEASE_21)
-@SupportedAnnotationTypes("com.reactor.rust.dubbo.codegen.GenerateNativeDubboClient")
+@SupportedAnnotationTypes({
+        "com.reactor.rust.dubbo.codegen.GenerateNativeDubboClient",
+        "com.reactor.rust.dubbo.codegen.GenerateNativeDubboClients",
+        "com.reactor.rust.dubbo.codegen.EnableNativeDubboClients"
+})
 public final class NativeDubboClientProcessor extends AbstractProcessor {
 
     private final Set<String> generatedTypes = new HashSet<>();
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnvironment) {
-        for (Element element : roundEnvironment.getElementsAnnotatedWith(GenerateNativeDubboClient.class)) {
+        Set<Element> definitions = new HashSet<>();
+        definitions.addAll(roundEnvironment.getElementsAnnotatedWith(GenerateNativeDubboClient.class));
+        definitions.addAll(roundEnvironment.getElementsAnnotatedWith(GenerateNativeDubboClients.class));
+        definitions.addAll(roundEnvironment.getElementsAnnotatedWith(EnableNativeDubboClients.class));
+        for (Element element : definitions) {
             if (!(element instanceof TypeElement definition)) {
                 error(element, "@GenerateNativeDubboClient requires a type declaration");
                 continue;
             }
-            try {
-                generate(definition);
-            } catch (FilerException duplicate) {
-                error(definition, "Native Dubbo client was generated more than once: " + duplicate.getMessage());
-            } catch (RuntimeException | IOException failure) {
-                error(definition, "Native Dubbo client generation failed: " + failure.getMessage());
+            GenerateNativeDubboClient[] configurations =
+                    definition.getAnnotationsByType(GenerateNativeDubboClient.class);
+            EnableNativeDubboClients lifecycle = definition.getAnnotation(EnableNativeDubboClients.class);
+            if (lifecycle != null && configurations.length == 0) {
+                error(definition, "@EnableNativeDubboClients requires at least one @GenerateNativeDubboClient");
+                continue;
+            }
+            List<GeneratedClient> generatedClients = new ArrayList<>(configurations.length);
+            for (GenerateNativeDubboClient configuration : configurations) {
+                try {
+                    generatedClients.add(generate(definition, configuration, configurations.length > 1));
+                } catch (FilerException duplicate) {
+                    error(definition, "Native Dubbo client was generated more than once: " + duplicate.getMessage());
+                } catch (RuntimeException | IOException failure) {
+                    error(definition, "Native Dubbo client generation failed: " + failure.getMessage());
+                }
+            }
+            if (lifecycle != null && generatedClients.size() == configurations.length) {
+                try {
+                    generateConfiguration(definition, lifecycle, generatedClients);
+                } catch (RuntimeException | IOException failure) {
+                    error(definition, "Native Dubbo configuration generation failed: " + failure.getMessage());
+                }
             }
         }
         return false;
     }
 
-    private void generate(TypeElement definition) throws IOException {
-        GenerateNativeDubboClient annotation = definition.getAnnotation(GenerateNativeDubboClient.class);
+    private GeneratedClient generate(
+            TypeElement definition,
+            GenerateNativeDubboClient annotation,
+            boolean repeatedDefinition) throws IOException {
         TypeMirror serviceMirror = serviceMirror(annotation);
         Element serviceElement = processingEnv.getTypeUtils().asElement(serviceMirror);
         if (!(serviceElement instanceof TypeElement service) || service.getKind() != ElementKind.INTERFACE) {
@@ -69,14 +96,16 @@ public final class NativeDubboClientProcessor extends AbstractProcessor {
 
         String packageName = processingEnv.getElementUtils().getPackageOf(definition).getQualifiedName().toString();
         String generatedName = annotation.generatedName().isBlank()
-                ? defaultGeneratedName(definition.getSimpleName().toString())
+                ? repeatedDefinition
+                        ? service.getSimpleName() + "Client"
+                        : defaultGeneratedName(definition.getSimpleName().toString())
                 : annotation.generatedName().trim();
         if (!SourceVersion.isIdentifier(generatedName)) {
             throw new IllegalArgumentException("generatedName must be a Java identifier: " + generatedName);
         }
         String qualifiedName = packageName.isEmpty() ? generatedName : packageName + "." + generatedName;
         if (!generatedTypes.add(qualifiedName)) {
-            return;
+            return new GeneratedClient(generatedName, qualifiedName);
         }
 
         List<ExecutableElement> methods = serviceMethods(service);
@@ -89,6 +118,53 @@ public final class NativeDubboClientProcessor extends AbstractProcessor {
         JavaFileObject source = processingEnv.getFiler().createSourceFile(qualifiedName, definition, service);
         try (Writer writer = source.openWriter()) {
             writer.write(source(packageName, generatedName, service, methods, annotation));
+        }
+        return new GeneratedClient(generatedName, qualifiedName);
+    }
+
+    private void generateConfiguration(
+            TypeElement definition,
+            EnableNativeDubboClients annotation,
+            List<GeneratedClient> clients) throws IOException {
+        String packageName = processingEnv.getElementUtils().getPackageOf(definition)
+                .getQualifiedName().toString();
+        String simpleName = annotation.generatedConfigurationName().isBlank()
+                ? definition.getSimpleName() + "__DubboConfiguration"
+                : annotation.generatedConfigurationName().trim();
+        if (!SourceVersion.isIdentifier(simpleName)) {
+            throw new IllegalArgumentException(
+                    "generatedConfigurationName must be a Java identifier: " + simpleName);
+        }
+        String qualifiedName = packageName.isEmpty() ? simpleName : packageName + "." + simpleName;
+        if (!generatedTypes.add(qualifiedName)) {
+            return;
+        }
+        JavaFileObject source = processingEnv.getFiler().createSourceFile(qualifiedName, definition);
+        try (Writer out = source.openWriter()) {
+            if (!packageName.isEmpty()) {
+                out.write("package " + packageName + ";\n\n");
+            }
+            out.write("@com.reactor.rust.di.annotation.Configuration\n");
+            out.write("public final class " + simpleName + " {\n");
+            out.write("    private final com.reactor.rust.dubbo.support.DubboConsumerSupport support;\n");
+            out.write("    private final com.reactor.rust.dubbo.NativeDubboConsumerClient client;\n\n");
+            out.write("    public " + simpleName + "() {\n");
+            out.write("        support = com.reactor.rust.dubbo.support.DubboConsumerSupport"
+                    + ".fromProperties(com.reactor.rust.config.PropertiesLoader.getAll())"
+                    + ".discoveryProperty(\"" + escape(annotation.discoveryProperty()) + "\");\n");
+            out.write("        client = com.reactor.rust.dubbo.NativeDubboConsumers.create(support.config());\n");
+            out.write("    }\n\n");
+            for (GeneratedClient generatedClient : clients) {
+                out.write("    @com.reactor.rust.di.annotation.Bean\n");
+                out.write("    public " + generatedClient.qualifiedName() + " "
+                        + beanName(generatedClient.simpleName()) + "() {\n");
+                out.write("        return " + generatedClient.qualifiedName()
+                        + ".create(client, support);\n");
+                out.write("    }\n\n");
+            }
+            out.write("    @com.reactor.rust.di.annotation.PreDestroy\n");
+            out.write("    public void close() { client.close(); }\n");
+            out.write("}\n");
         }
     }
 
@@ -385,4 +461,10 @@ public final class NativeDubboClientProcessor extends AbstractProcessor {
     private static String escape(String value) {
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
+
+    private static String beanName(String simpleName) {
+        return Character.toLowerCase(simpleName.charAt(0)) + simpleName.substring(1);
+    }
+
+    private record GeneratedClient(String simpleName, String qualifiedName) {}
 }
