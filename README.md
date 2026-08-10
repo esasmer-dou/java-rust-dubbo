@@ -13,10 +13,26 @@ The library keeps the programming model simple:
 - Dubbo calls can use a Rust native transport for lower JVM RSS.
 - ZooKeeper and the official Dubbo/Netty client stack are optional, not default requirements.
 
-The current aligned release is `java-rust-dubbo:0.6.0` with `rust-java-rest:4.1.0`. It adds one
+The current aligned release is `java-rust-dubbo:0.7.0` with `rust-java-rest:4.2.0`. It adds one
 declarative client set, one shared bounded transport lifecycle, repeatable generated client
 declarations, and build-time validation. Existing provider restart handling and the exclusive
 `blocking` or `tokio-demux` transport planes remain in place.
+
+## Five-Minute Decision
+
+| Your environment | Use | JVM surface |
+| --- | --- | --- |
+| Kubernetes Service DNS or known provider address | Native static discovery | No official Dubbo, Netty, or ZooKeeper client runtime |
+| Provider list must be watched in ZooKeeper | Native transport plus ZooKeeper discovery | ZooKeeper client is loaded; official Dubbo data plane is still avoided |
+| Full Dubbo governance is mandatory | Official mode | Full Dubbo/Netty runtime and its larger thread/class surface |
+
+For the smallest production consumer, start with `rust-java-starter-dubbo`, generated clients, static
+Service DNS, `tokio-demux`, and a bounded per-route admission limit. Keep business decisions and
+typed interfaces in Java. The generated client removes dynamic proxy and repeated method-plan work.
+
+Do not enable ZooKeeper only because the provider has multiple replicas. A Kubernetes Service can
+load-balance one stable DNS name across those replicas. Use ZooKeeper when its registry semantics,
+provider metadata, or cross-platform discovery are real requirements.
 
 ## When To Use It
 
@@ -36,7 +52,7 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.6.0</version>
+  <version>0.7.0</version>
 </dependency>
 ```
 
@@ -82,7 +98,7 @@ For the smallest static-provider native setup, use the `native-static` classifie
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.6.0</version>
+  <version>0.7.0</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -98,10 +114,12 @@ If you need ZooKeeper discovery, argument-bearing Dubbo methods, DTO decoding, o
 
 The Java/Rust framework native library must also be present. In `rust-java-rest`, the framework loads that native library for you. In standalone tests, make sure `rust_hyper` is available through `java.library.path`.
 
-Native Dubbo transport requires Dubbo native ABI `7`. The aligned `rust-java-rest:4.1.0` runtime
-reports REST ABI `24`, Dubbo ABI `7`, and Redis ABI `6`. Framework startup verifies the packaged
-source revision and platform hash; `NativeDubboBridge` also checks the Dubbo ABI before the first
-native client is created. Do not copy a DLL/SO from an older framework release into a newer image.
+Native Dubbo transport requires Dubbo native ABI `7`. The current aligned source runtime
+uses REST ABI `26` and Redis ABI `6`. The published Maven version shown in this guide remains
+`rust-java-rest:4.2.0`; use the native artifact packaged with the same build.
+Framework startup verifies the packaged source revision and platform hash. `NativeDubboBridge` also
+checks the Dubbo ABI before the first native client is created. Do not copy a DLL/SO from an older
+framework release into a newer image.
 
 ## Public API Boundary
 
@@ -328,7 +346,7 @@ runtime dependency surface:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.6.0</version>
+  <version>0.7.0</version>
   <classifier>codegen</classifier>
   <scope>provided</scope>
 </dependency>
@@ -341,7 +359,7 @@ Add the build-only classifier to `annotationProcessorPaths`:
   <path>
     <groupId>com.reactor</groupId>
     <artifactId>java-rust-dubbo</artifactId>
-    <version>0.6.0</version>
+    <version>0.7.0</version>
     <classifier>codegen</classifier>
   </path>
 </annotationProcessorPaths>
@@ -364,7 +382,10 @@ Declare the contract once:
         version = "1.0.0")
 @GenerateNativeDubboClient(
         service = CustomerProviderApi.class,
-        generatedName = "CustomerClient")
+        generatedName = "CustomerClient",
+        enabledProperty = "sample.consumer.surface",
+        havingValue = "full",
+        matchIfMissing = true)
 final class DubboClients {
     private DubboClients() {}
 }
@@ -388,6 +409,28 @@ client. Repeating `@GenerateNativeDubboClient` does not create one transport per
 Use it together with at least one `@GenerateNativeDubboClient` declaration. The build fails early if
 the enable annotation has no client contract or if a generated configuration name is not a valid
 Java identifier.
+
+`enabledProperty`, `havingValue`, and `matchIfMissing` control client-bean registration at startup.
+The generated bean method carries the same framework condition as the handler that needs it. A
+disabled client is not created and does not add a branch to every RPC call. Inject the client through
+`Optional<T>` only when the owning component itself must remain active in both modes.
+
+For the smallest static-provider artifact, make the transport contract explicit:
+
+```java
+@EnableNativeDubboClients(
+        discoveryProperty = "sample.dubbo.discovery",
+        staticOnly = true)
+@GenerateNativeDubboClient(
+        service = CatalogProviderApi.class,
+        generatedName = "CatalogClient")
+final class NativeStaticClients {}
+```
+
+`staticOnly=true` rejects ZooKeeper discovery during startup. Pair it with the `native-static`
+classifier and a Maven profile that physically excludes full-Dubbo and ZooKeeper sources. A runtime
+property alone is useful for one general artifact, but it cannot remove unused classes from that
+artifact.
 
 The generated class exposes exact methods such as `nestedCatalogJsonAsync()` and, for a `byte[]`
 result, `nestedCatalogJsonNativeJsonAsync()`. The latter returns `NativeResponseHandle` and avoids
@@ -516,13 +559,13 @@ public final class CatalogHandler {
 
 If the provider is down or overloaded, handle the failed future and return a controlled HTTP response from your application layer.
 
-### 7. Add A Route-Level Limit
+### 8. Add A Route-Level Limit
 
 Native limits protect the Dubbo client. Your HTTP route should also have its own concurrency policy.
 
 Use a small route-level bulkhead when low RSS matters. Use a larger but still bounded limit for balanced throughput. Avoid unbounded queues.
 
-### 8. Verify Before Production
+### 9. Verify Before Production
 
 Before shipping:
 
@@ -670,13 +713,13 @@ mvn clean verify
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-0.6.0.jar`
-- `java-rust-dubbo-0.6.0-native-static.jar`
-- `java-rust-dubbo-0.6.0-codegen.jar` (build time only)
-- `java-rust-dubbo-0.6.0-sources.jar`
+- `java-rust-dubbo-0.7.0.jar`
+- `java-rust-dubbo-0.7.0-native-static.jar`
+- `java-rust-dubbo-0.7.0-codegen.jar` (build time only)
+- `java-rust-dubbo-0.7.0-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v0.6.0.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.7.0.md)
 - [Turkish README](README.tr.md)

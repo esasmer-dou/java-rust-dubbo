@@ -155,9 +155,13 @@ class NativeDubboClientProcessorTest {
                 import com.reactor.rust.dubbo.codegen.EnableNativeDubboClients;
                 import com.reactor.rust.dubbo.codegen.GenerateNativeDubboClient;
 
-                @EnableNativeDubboClients(discoveryProperty = "sample.discovery")
+                @EnableNativeDubboClients(discoveryProperty = "sample.discovery", staticOnly = true)
                 @GenerateNativeDubboClient(service = Clients.CatalogService.class)
-                @GenerateNativeDubboClient(service = Clients.CustomerService.class)
+                @GenerateNativeDubboClient(
+                        service = Clients.CustomerService.class,
+                        enabledProperty = "sample.surface",
+                        havingValue = "full",
+                        matchIfMissing = true)
                 public final class Clients {
                     public interface CatalogService { byte[] catalog(); }
                     public interface CustomerService { boolean exists(long id); }
@@ -187,8 +191,13 @@ class NativeDubboClientProcessorTest {
         String configuration = Files.readString(
                 generatedDir.resolve("generated/fixture/Clients__DubboConfiguration.java"));
         assertTrue(configuration.contains(".discoveryProperty(\"sample.discovery\")"));
+        assertTrue(configuration.contains("support.requireStaticDiscovery()"));
+        assertTrue(configuration.contains("support.staticConfig()"));
         assertTrue(configuration.contains("CatalogServiceClient.create(client, support)"));
         assertTrue(configuration.contains("CustomerServiceClient.create(client, support)"));
+        assertTrue(configuration.contains(
+                "@com.reactor.rust.annotations.RequiresProperty(name = \"sample.surface\", "
+                        + "value = \"full\", matchIfMissing = true)"));
     }
 
     @Test

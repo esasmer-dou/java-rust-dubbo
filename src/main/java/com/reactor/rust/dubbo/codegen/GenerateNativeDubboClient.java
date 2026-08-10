@@ -27,4 +27,13 @@ public @interface GenerateNativeDubboClient {
     String group() default "";
 
     String version() default "";
+
+    /** Startup property that controls whether this generated client bean is registered. */
+    String enabledProperty() default "";
+
+    /** Required value for {@link #enabledProperty()}; empty means any non-empty value. */
+    String havingValue() default "true";
+
+    /** Keeps existing declarations enabled when the controlling property is absent. */
+    boolean matchIfMissing() default false;
 }

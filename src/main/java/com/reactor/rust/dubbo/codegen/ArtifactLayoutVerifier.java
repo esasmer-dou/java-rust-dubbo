@@ -13,13 +13,13 @@ public final class ArtifactLayoutVerifier {
 
     public static void main(String[] args) throws IOException {
         if (args.length != 3) {
-            throw new IllegalArgumentException("Expected: <runtime-jar> <codegen-jar> <class-prefix>");
+            throw new IllegalArgumentException("Expected: <runtime-jar> <codegen-jar> <processor-prefix>");
         }
         if (contains(Path.of(args[0]), args[2])) {
-            throw new IllegalStateException("Runtime artifact contains build-time classes: " + args[2]);
+            throw new IllegalStateException("Runtime artifact contains annotation processor classes: " + args[2]);
         }
         if (!contains(Path.of(args[1]), args[2])) {
-            throw new IllegalStateException("Codegen artifact is missing build-time classes: " + args[2]);
+            throw new IllegalStateException("Codegen artifact is missing annotation processor classes: " + args[2]);
         }
         Path runtime = Path.of(args[0]);
         Path codegen = Path.of(args[1]);

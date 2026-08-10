@@ -6,7 +6,7 @@
 
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.6.0</version>
+  <version>0.7.0</version>
   <packaging>jar</packaging>
 
   <name>java-rust-dubbo</name>
@@ -29,7 +29,7 @@
     <zookeeper.version>3.7.2</zookeeper.version>
     <slf4j.version>1.7.35</slf4j.version>
     <hikaricp.version>5.1.0</hikaricp.version>
-    <rust-java-rest.version>4.1.0</rust-java-rest.version>
+    <rust-java-rest.version>4.2.0</rust-java-rest.version>
     <junit.version>5.11.4</junit.version>
   </properties>
 
@@ -227,9 +227,25 @@
             <phase>prepare-package</phase>
             <goals><goal>copy-resources</goal></goals>
             <configuration>
-              <outputDirectory>${project.build.outputDirectory}</outputDirectory>
+              <outputDirectory>${project.build.directory}/codegen-classes</outputDirectory>
               <resources>
                 <resource><directory>src/codegen/resources</directory></resource>
+              </resources>
+            </configuration>
+          </execution>
+          <execution>
+            <id>copy-codegen-classes</id>
+            <phase>prepare-package</phase>
+            <goals><goal>copy-resources</goal></goals>
+            <configuration>
+              <outputDirectory>${project.build.directory}/codegen-classes</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${project.build.outputDirectory}</directory>
+                  <includes>
+                    <include>com/reactor/rust/dubbo/codegen/**</include>
+                  </includes>
+                </resource>
               </resources>
             </configuration>
           </execution>
@@ -257,7 +273,8 @@
             <id>default-jar</id>
             <configuration>
               <excludes>
-                <exclude>com/reactor/rust/dubbo/codegen/**</exclude>
+                <exclude>com/reactor/rust/dubbo/codegen/ArtifactLayoutVerifier*.class</exclude>
+                <exclude>com/reactor/rust/dubbo/codegen/NativeDubboClientProcessor*.class</exclude>
                 <exclude>META-INF/services/javax.annotation.processing.Processor</exclude>
               </excludes>
             </configuration>
@@ -290,6 +307,9 @@
                 <include>com/reactor/rust/dubbo/internal/nativeclient/StaticNativeDubboReference*.class</include>
                 <include>com/reactor/rust/dubbo/internal/runtime/DubboRuntimeTuning*.class</include>
                 <include>com/reactor/rust/dubbo/support/DubboConsumerSupport*.class</include>
+                <include>com/reactor/rust/dubbo/codegen/EnableNativeDubboClients*.class</include>
+                <include>com/reactor/rust/dubbo/codegen/GenerateNativeDubboClient*.class</include>
+                <include>com/reactor/rust/dubbo/codegen/GenerateNativeDubboClients*.class</include>
               </includes>
             </configuration>
           </execution>
@@ -301,6 +321,7 @@
             </goals>
             <configuration>
               <classifier>codegen</classifier>
+              <classesDirectory>${project.build.directory}/codegen-classes</classesDirectory>
               <includes>
                 <include>com/reactor/rust/dubbo/codegen/**</include>
                 <include>META-INF/services/javax.annotation.processing.Processor</include>
@@ -313,6 +334,12 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-source-plugin</artifactId>
         <version>3.3.1</version>
+        <configuration>
+          <excludes>
+            <exclude>com/reactor/rust/dubbo/codegen/ArtifactLayoutVerifier.java</exclude>
+            <exclude>com/reactor/rust/dubbo/codegen/NativeDubboClientProcessor.java</exclude>
+          </excludes>
+        </configuration>
         <executions>
           <execution>
             <id>attach-sources</id>
@@ -337,7 +364,7 @@
               <arguments>
                 <argument>${project.build.directory}/${project.build.finalName}.jar</argument>
                 <argument>${project.build.directory}/${project.build.finalName}-codegen.jar</argument>
-                <argument>com/reactor/rust/dubbo/codegen/</argument>
+                <argument>com/reactor/rust/dubbo/codegen/NativeDubboClientProcessor</argument>
               </arguments>
             </configuration>
           </execution>

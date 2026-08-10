@@ -40,6 +40,14 @@ public final class DubboConsumerSupport {
         return DubboConsumerConfig.fromProperties(properties);
     }
 
+    public void requireStaticDiscovery() {
+        if (zookeeperDiscovery()) {
+            throw new IllegalStateException(
+                    "This native Dubbo client was generated for static providers only; "
+                            + discoveryProperty + " must be static");
+        }
+    }
+
     public <T> DubboReferenceSpec<T> reference(Class<T> serviceType) {
         return referenceBuilder(serviceType).build();
     }

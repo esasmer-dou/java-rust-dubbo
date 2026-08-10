@@ -12,10 +12,26 @@ Kullanım modeli basittir:
 - İsterseniz Dubbo TCP data-plane Rust tarafında çalışır; böylece consumer JVM daha küçük kalır.
 - ZooKeeper, Netty ve resmi Dubbo client stack varsayılan olarak zorunlu değildir.
 
-Güncel uyumlu sürüm çizgisi `java-rust-dubbo:0.6.0` ve `rust-java-rest:4.1.0` şeklindedir. Birden
+Güncel uyumlu sürüm çizgisi `java-rust-dubbo:0.7.0` ve `rust-java-rest:4.2.0` şeklindedir. Birden
 fazla Dubbo interface'i tek bir deklaratif client seti içinde tanımlayabilirsiniz. Generated client
 bean'leri aynı bounded transport lifecycle'ı paylaşır. Provider restart güvenliği ve yalnız seçilen
 `blocking` veya `tokio-demux` transport kaynaklarının açılması davranışı korunur.
+
+## Beş Dakikada Karar Verin
+
+| Ortamınız | Seçim | JVM'e eklenen yüzey |
+| --- | --- | --- |
+| Kubernetes Service DNS veya bilinen provider adresi | Native static discovery | Resmi Dubbo, Netty ve ZooKeeper client runtime yok |
+| Provider listesi ZooKeeper'dan izlenmek zorunda | Native transport ve ZooKeeper discovery | ZooKeeper client yüklenir; resmi Dubbo data plane yine kullanılmaz |
+| Full Dubbo governance zorunlu | Official mode | Full Dubbo/Netty runtime ve daha büyük thread/class yüzeyi |
+
+En küçük production consumer için `rust-java-starter-dubbo`, generated client, static Service DNS,
+`tokio-demux` ve bounded route admission ile başlayın. Business kararı ve typed interface Java'da
+kalır. Generated client; dynamic proxy ve tekrar eden method-plan maliyetini kaldırır.
+
+Yalnız provider'ın birden fazla replica'sı olduğu için ZooKeeper açmayın. Kubernetes Service, tek ve
+kararlı DNS adını replica'lar arasında load balance edebilir. Registry davranışı, provider metadata
+veya platformlar arası discovery gerçekten gerekiyorsa ZooKeeper kullanın.
 
 Bu kütüphane, "dependency ekleyince her şeyi otomatik yapsın" yaklaşımından bilinçli olarak uzak durur. Kurulum açık ve kontrollüdür. Bunun nedeni memory, thread ve latency davranışını üretim ortamında daha öngörülebilir yönetmektir.
 
@@ -41,7 +57,7 @@ Bu kütüphane, "dependency ekleyince her şeyi otomatik yapsın" yaklaşımınd
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.6.0</version>
+  <version>0.7.0</version>
 </dependency>
 ```
 
@@ -87,7 +103,7 @@ En küçük static-provider native kurulum için full JAR yerine `native-static`
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.6.0</version>
+  <version>0.7.0</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -103,11 +119,12 @@ ZooKeeper discovery, argümanlı Dubbo metotları, DTO decode, official Dubbo uy
 
 Native modun çalışması için Java/Rust framework native library de yüklü olmalıdır. `rust-java-rest` içinde bu native library framework tarafından yüklenir. Standalone testlerde `rust_hyper` kütüphanesini `java.library.path` ile görünür hale getirmek gerekir.
 
-Native Dubbo transport, Dubbo native ABI `7` gerektirir. Uyumlu `rust-java-rest:4.1.0` runtime REST
-ABI `24`, Dubbo ABI `7` ve Redis ABI `6` raporlar. Framework startup sırasında paketlenen kaynak
-revision ve platform hash bilgisini doğrular. `NativeDubboBridge` de ilk native client oluşturulmadan
-önce Dubbo ABI kontrolü yapar. Eski framework release'inden alınan DLL/SO dosyasını yeni image içine
-kopyalamayın.
+Native Dubbo transport, Dubbo native ABI `7` gerektirir. Güncel uyumlu kaynak runtime'ı REST ABI
+`26` ve Redis ABI `6` kullanır. Bu rehberde gösterilen yayınlanmış Maven sürümü
+`rust-java-rest:4.2.0` olarak kalır. Aynı build içinde paketlenen native artefact'i kullanın.
+Framework startup sırasında paketlenen kaynak revision ve platform hash bilgisini doğrular.
+`NativeDubboBridge` de ilk native client oluşturulmadan önce Dubbo ABI kontrolü yapar. Eski framework
+release'inden alınan DLL/SO dosyasını yeni image içine kopyalamayın.
 
 ## Kullanılacak API Sınırı
 
@@ -323,7 +340,7 @@ runtime dependency yüzeyine girmesini önler:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.6.0</version>
+  <version>0.7.0</version>
   <classifier>codegen</classifier>
   <scope>provided</scope>
 </dependency>
@@ -336,7 +353,7 @@ Build-only classifier'ı `annotationProcessorPaths` içine ekleyin:
   <path>
     <groupId>com.reactor</groupId>
     <artifactId>java-rust-dubbo</artifactId>
-    <version>0.6.0</version>
+    <version>0.7.0</version>
     <classifier>codegen</classifier>
   </path>
 </annotationProcessorPaths>
@@ -359,7 +376,10 @@ Kontratı bir kez tanımlayın:
         version = "1.0.0")
 @GenerateNativeDubboClient(
         service = CustomerProviderApi.class,
-        generatedName = "CustomerClient")
+        generatedName = "CustomerClient",
+        enabledProperty = "sample.consumer.surface",
+        havingValue = "full",
+        matchIfMissing = true)
 final class DubboClients {
     private DubboClients() {}
 }
@@ -384,6 +404,28 @@ oluşturmaz.
 Bu annotation'ı en az bir `@GenerateNativeDubboClient` tanımıyla birlikte kullanın. Client kontratı
 yoksa veya generated configuration adı geçerli bir Java identifier değilse build açık bir hata ile
 durur.
+
+`enabledProperty`, `havingValue` ve `matchIfMissing`, client bean'inin başlangıçta kaydedilip
+kaydedilmeyeceğini belirler. Generated bean metodu, kendisini kullanan handler ile aynı framework
+koşulunu taşır. Kapalı client oluşturulmaz ve her RPC çağrısına yeni bir branch eklenmez. Aynı
+component hem açık hem kapalı modda çalışmak zorundaysa client'ı `Optional<T>` olarak alın.
+
+En küçük sabit-provider artefact'i için transport sınırını açıkça belirtin:
+
+```java
+@EnableNativeDubboClients(
+        discoveryProperty = "sample.dubbo.discovery",
+        staticOnly = true)
+@GenerateNativeDubboClient(
+        service = CatalogProviderApi.class,
+        generatedName = "CatalogClient")
+final class NativeStaticClients {}
+```
+
+`staticOnly=true`, ZooKeeper discovery seçilirse uygulamayı başlangıçta durdurur. Bu seçeneği
+`native-static` classifier ve full-Dubbo ile ZooKeeper kaynaklarını fiziksel olarak dışarıda bırakan
+bir Maven profile'ıyla birlikte kullanın. Runtime property tek bir genel artefact için yararlıdır.
+Ancak kullanılmayan sınıfları o artefact'ten çıkaramaz.
 
 Üretilen sınıfta `nestedCatalogJsonAsync()` gibi doğrudan metotlar bulunur. Dönüş tipi `byte[]` ise
 `nestedCatalogJsonNativeJsonAsync()` metodu da oluşur. Bu metot `NativeResponseHandle` döner. REST
@@ -512,13 +554,13 @@ public final class CatalogHandler {
 
 Provider hata verirse veya timeout olursa uygulama katmanında kontrollü HTTP response dönün. Örneğin 503 ve kısa bir JSON hata body çoğu senaryo için yeterlidir.
 
-### 7. Route Seviyesinde Limit Ekleyin
+### 8. Route Seviyesinde Limit Ekleyin
 
 Native client kendi içinde `max-inflight` ve queue limitleriyle korunur. Fakat HTTP endpoint seviyesinde de limit olması daha doğrudur.
 
 Düşük RSS servislerde route bulkhead küçük tutulur. Overload durumunda kontrollü 503 dönmek, binlerce request'i queue'da bekletmekten daha sağlıklıdır.
 
-### 8. Production Öncesi Test Edin
+### 9. Production Öncesi Test Edin
 
 Canlıya çıkmadan önce şu senaryoları test edin:
 
@@ -673,9 +715,9 @@ mvn clean verify
 
 Üretilen paketler:
 
-- `target/java-rust-dubbo-0.6.0.jar`
-- `target/java-rust-dubbo-0.6.0-native-static.jar`
-- `target/java-rust-dubbo-0.6.0-codegen.jar` (yalnızca derleme sırasında kullanılır)
-- `target/java-rust-dubbo-0.6.0-sources.jar`
+- `target/java-rust-dubbo-0.7.0.jar`
+- `target/java-rust-dubbo-0.7.0-native-static.jar`
+- `target/java-rust-dubbo-0.7.0-codegen.jar` (yalnızca derleme sırasında kullanılır)
+- `target/java-rust-dubbo-0.7.0-sources.jar`
 
-Sürüm ayrıntıları: [java-rust-dubbo 0.6.0](docs/RELEASE_NOTES_v0.6.0.md).
+Sürüm ayrıntıları: [java-rust-dubbo 0.7.0](docs/RELEASE_NOTES_v0.7.0.tr.md).

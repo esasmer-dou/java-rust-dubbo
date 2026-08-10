@@ -13,4 +13,7 @@ public @interface EnableNativeDubboClients {
     String discoveryProperty() default "reactor.dubbo.discovery";
 
     String generatedConfigurationName() default "";
+
+    /** Rejects ZooKeeper discovery and creates a static-provider-only transport. */
+    boolean staticOnly() default false;
 }

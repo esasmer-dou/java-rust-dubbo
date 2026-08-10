@@ -105,7 +105,7 @@ public final class NativeDubboClientProcessor extends AbstractProcessor {
         }
         String qualifiedName = packageName.isEmpty() ? generatedName : packageName + "." + generatedName;
         if (!generatedTypes.add(qualifiedName)) {
-            return new GeneratedClient(generatedName, qualifiedName);
+            return generatedClient(generatedName, qualifiedName, annotation);
         }
 
         List<ExecutableElement> methods = serviceMethods(service);
@@ -119,7 +119,7 @@ public final class NativeDubboClientProcessor extends AbstractProcessor {
         try (Writer writer = source.openWriter()) {
             writer.write(source(packageName, generatedName, service, methods, annotation));
         }
-        return new GeneratedClient(generatedName, qualifiedName);
+        return generatedClient(generatedName, qualifiedName, annotation);
     }
 
     private void generateConfiguration(
@@ -152,9 +152,19 @@ public final class NativeDubboClientProcessor extends AbstractProcessor {
             out.write("        support = com.reactor.rust.dubbo.support.DubboConsumerSupport"
                     + ".fromProperties(com.reactor.rust.config.PropertiesLoader.getAll())"
                     + ".discoveryProperty(\"" + escape(annotation.discoveryProperty()) + "\");\n");
-            out.write("        client = com.reactor.rust.dubbo.NativeDubboConsumers.create(support.config());\n");
+            if (annotation.staticOnly()) {
+                out.write("        support.requireStaticDiscovery();\n");
+            }
+            out.write("        client = com.reactor.rust.dubbo.NativeDubboConsumers.create(support."
+                    + (annotation.staticOnly() ? "staticConfig" : "config") + "());\n");
             out.write("    }\n\n");
             for (GeneratedClient generatedClient : clients) {
+                if (!generatedClient.enabledProperty().isBlank()) {
+                    out.write("    @com.reactor.rust.annotations.RequiresProperty(name = \""
+                            + escape(generatedClient.enabledProperty()) + "\", value = \""
+                            + escape(generatedClient.havingValue()) + "\", matchIfMissing = "
+                            + generatedClient.matchIfMissing() + ")\n");
+                }
                 out.write("    @com.reactor.rust.di.annotation.Bean\n");
                 out.write("    public " + generatedClient.qualifiedName() + " "
                         + beanName(generatedClient.simpleName()) + "() {\n");
@@ -466,5 +476,22 @@ public final class NativeDubboClientProcessor extends AbstractProcessor {
         return Character.toLowerCase(simpleName.charAt(0)) + simpleName.substring(1);
     }
 
-    private record GeneratedClient(String simpleName, String qualifiedName) {}
+    private static GeneratedClient generatedClient(
+            String simpleName,
+            String qualifiedName,
+            GenerateNativeDubboClient annotation) {
+        return new GeneratedClient(
+                simpleName,
+                qualifiedName,
+                annotation.enabledProperty().trim(),
+                annotation.havingValue().trim(),
+                annotation.matchIfMissing());
+    }
+
+    private record GeneratedClient(
+            String simpleName,
+            String qualifiedName,
+            String enabledProperty,
+            String havingValue,
+            boolean matchIfMissing) {}
 }
