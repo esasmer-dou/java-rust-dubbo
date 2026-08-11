@@ -12,7 +12,7 @@ Kullanım modeli basittir:
 - İsterseniz Dubbo TCP data-plane Rust tarafında çalışır; böylece consumer JVM daha küçük kalır.
 - ZooKeeper, Netty ve resmi Dubbo client stack varsayılan olarak zorunlu değildir.
 
-Güncel uyumlu sürüm çizgisi `java-rust-dubbo:0.7.0` ve `rust-java-rest:4.2.0` şeklindedir. Birden
+Güncel uyumlu sürüm çizgisi `java-rust-dubbo:0.7.1` ve `rust-java-rest:4.3.0` şeklindedir. Birden
 fazla Dubbo interface'i tek bir deklaratif client seti içinde tanımlayabilirsiniz. Generated client
 bean'leri aynı bounded transport lifecycle'ı paylaşır. Provider restart güvenliği ve yalnız seçilen
 `blocking` veya `tokio-demux` transport kaynaklarının açılması davranışı korunur.
@@ -57,7 +57,7 @@ Bu kütüphane, "dependency ekleyince her şeyi otomatik yapsın" yaklaşımınd
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.7.0</version>
+  <version>0.7.1</version>
 </dependency>
 ```
 
@@ -103,7 +103,7 @@ En küçük static-provider native kurulum için full JAR yerine `native-static`
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.7.0</version>
+  <version>0.7.1</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -121,7 +121,7 @@ Native modun çalışması için Java/Rust framework native library de yüklü o
 
 Native Dubbo transport, Dubbo native ABI `7` gerektirir. Güncel uyumlu kaynak runtime'ı REST ABI
 `26` ve Redis ABI `6` kullanır. Bu rehberde gösterilen yayınlanmış Maven sürümü
-`rust-java-rest:4.2.0` olarak kalır. Aynı build içinde paketlenen native artefact'i kullanın.
+`rust-java-rest:4.3.0` olarak kalır. Aynı build içinde paketlenen native artefact'i kullanın.
 Framework startup sırasında paketlenen kaynak revision ve platform hash bilgisini doğrular.
 `NativeDubboBridge` de ilk native client oluşturulmadan önce Dubbo ABI kontrolü yapar. Eski framework
 release'inden alınan DLL/SO dosyasını yeni image içine kopyalamayın.
@@ -340,7 +340,7 @@ runtime dependency yüzeyine girmesini önler:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.7.0</version>
+  <version>0.7.1</version>
   <classifier>codegen</classifier>
   <scope>provided</scope>
 </dependency>
@@ -353,7 +353,7 @@ Build-only classifier'ı `annotationProcessorPaths` içine ekleyin:
   <path>
     <groupId>com.reactor</groupId>
     <artifactId>java-rust-dubbo</artifactId>
-    <version>0.7.0</version>
+    <version>0.7.1</version>
     <classifier>codegen</classifier>
   </path>
 </annotationProcessorPaths>
@@ -715,9 +715,9 @@ mvn clean verify
 
 Üretilen paketler:
 
-- `target/java-rust-dubbo-0.7.0.jar`
-- `target/java-rust-dubbo-0.7.0-native-static.jar`
-- `target/java-rust-dubbo-0.7.0-codegen.jar` (yalnızca derleme sırasında kullanılır)
-- `target/java-rust-dubbo-0.7.0-sources.jar`
+- `target/java-rust-dubbo-0.7.1.jar`
+- `target/java-rust-dubbo-0.7.1-native-static.jar`
+- `target/java-rust-dubbo-0.7.1-codegen.jar` (yalnızca derleme sırasında kullanılır)
+- `target/java-rust-dubbo-0.7.1-sources.jar`
 
-Sürüm ayrıntıları: [java-rust-dubbo 0.7.0](docs/RELEASE_NOTES_v0.7.0.tr.md).
+Sürüm ayrıntıları: [java-rust-dubbo 0.7.1](docs/RELEASE_NOTES_v0.7.1.tr.md).

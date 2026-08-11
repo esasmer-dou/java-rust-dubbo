@@ -6,7 +6,7 @@
 
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.7.0</version>
+  <version>0.7.1</version>
   <packaging>jar</packaging>
 
   <name>java-rust-dubbo</name>
@@ -29,7 +29,7 @@
     <zookeeper.version>3.7.2</zookeeper.version>
     <slf4j.version>1.7.35</slf4j.version>
     <hikaricp.version>5.1.0</hikaricp.version>
-    <rust-java-rest.version>4.2.0</rust-java-rest.version>
+    <rust-java-rest.version>4.3.0</rust-java-rest.version>
     <junit.version>5.11.4</junit.version>
   </properties>
 
