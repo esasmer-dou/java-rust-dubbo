@@ -1,6 +1,9 @@
 # java-rust-dubbo
 
-[English](https://github.com/esasmer-dou/java-rust-dubbo/blob/main/README.md) | [Turkish](https://github.com/esasmer-dou/java-rust-dubbo/blob/main/README.tr.md)
+[English](README.md) | [Türkçe](README.tr.md)
+
+[![Version](https://img.shields.io/badge/version-0.7.1-blue.svg)](https://github.com/esasmer-dou/java-rust-dubbo/releases/tag/v0.7.1)
+[![REST line](https://img.shields.io/badge/rust--java--rest-4.3.0-green.svg)](https://github.com/esasmer-dou/rust-java-rest/releases/tag/v4.3.0)
 
 `java-rust-dubbo` is a small Dubbo consumer library for the Java/Rust REST framework.
 
@@ -18,6 +21,30 @@ declarative client set, one shared bounded transport lifecycle, repeatable gener
 declarations, and build-time validation. Existing provider restart handling and the exclusive
 `blocking` or `tokio-demux` transport planes remain in place.
 
+## Start Here
+
+| I need... | Start with... |
+| --- | --- |
+| Lowest-RSS consumer behind Kubernetes Service DNS | Generated client, native static discovery, and `tokio-demux` |
+| ZooKeeper provider discovery without official Dubbo data plane | Generated client, ZooKeeper discovery, and native transport |
+| Full Dubbo governance and compatibility | Official mode, accepting its larger JVM surface |
+
+For an executable consumer/provider pair, use
+[`rest-sample-dubbo-consumer`](https://github.com/esasmer-dou/rest-sample-dubbo-consumer) and
+[`rest-sample-dubbo-provider`](https://github.com/esasmer-dou/rest-sample-dubbo-provider).
+
+## Contents
+
+- [Five-minute decision](#five-minute-decision)
+- [Maven dependency](#maven)
+- [Public API boundary](#public-api-boundary)
+- [Generated client quick start](#quick-start)
+- [Configuration reference](#configuration-reference)
+- [Starting profiles](#suggested-starting-profiles)
+- [Native and official modes](#native-mode-vs-official-mode)
+- [Native-mode limits](#current-native-mode-limits)
+- [Build and artifacts](#build)
+
 ## Five-Minute Decision
 
 | Your environment | Use | JVM surface |
@@ -33,6 +60,22 @@ typed interfaces in Java. The generated client removes dynamic proxy and repeate
 Do not enable ZooKeeper only because the provider has multiple replicas. A Kubernetes Service can
 load-balance one stable DNS name across those replicas. Use ZooKeeper when its registry semantics,
 provider metadata, or cross-platform discovery are real requirements.
+
+## Request Flow
+
+```mermaid
+flowchart LR
+    HTTP["HTTP client"] --> RH["Rust Hyper"]
+    RH --> J["Java handler and service"]
+    J --> C["Generated Dubbo client"]
+    C --> NT["Bounded Rust Dubbo transport"]
+    NT --> P["Dubbo provider"]
+```
+
+Java owns the service contract, validation, business decision, and response choice. Rust owns the
+bounded client transport, connection reuse, timeout, and optional native response handle. Static
+discovery does not mean one provider pod; the address can be a Kubernetes Service that fronts many
+replicas.
 
 ## When To Use It
 
@@ -704,6 +747,30 @@ Native mode is intentionally focused. It does not currently implement:
 - Multiplexed request demux over a single Dubbo connection.
 
 For many REST-to-Dubbo consumer cases this is enough. If your system depends on the missing features, use official mode or put a full Dubbo integration service behind a smaller REST process.
+
+## Production Checklist
+
+- Prefer generated clients; keep manual invoker wiring for deliberately unsupported contracts.
+- Use static Kubernetes Service DNS unless registry semantics are a real requirement.
+- Keep retries at `0` for commands unless the operation is explicitly idempotent.
+- Bound timeout, max in-flight calls, queue capacity, connections, and route admission together.
+- Return native handles only when Java does not need to inspect or transform the body.
+- Expose dependency readiness separately from process liveness.
+- Test provider restart, endpoint removal, c64/c256 load, p99, `503`, RSS, and post-idle retention.
+- Use official mode when correctness requires an unsupported governance feature; do not emulate it
+  partially in business code.
+
+## Glossary
+
+| Term | Meaning |
+| --- | --- |
+| Discovery | How the consumer receives provider addresses |
+| Static discovery | A configured address or Service DNS; it may still represent many replicas |
+| Native mode | Rust transport with the deliberately small supported Dubbo feature set |
+| Official mode | Apache Dubbo client runtime with its broader compatibility and larger JVM surface |
+| Demux | Matching an asynchronous response to its request id |
+| Bulkhead | A concurrency boundary that stops one dependency from consuming all capacity |
+| Native response handle | A response id that lets HTTP send a Rust-resident provider body without a Java `byte[]` |
 
 ## Build
 

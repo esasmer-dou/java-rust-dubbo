@@ -1,6 +1,9 @@
 # java-rust-dubbo
 
-[English](https://github.com/esasmer-dou/java-rust-dubbo/blob/main/README.md) | [Turkish](https://github.com/esasmer-dou/java-rust-dubbo/blob/main/README.tr.md)
+[English](README.md) | [Türkçe](README.tr.md)
+
+[![Sürüm](https://img.shields.io/badge/sürüm-0.7.1-blue.svg)](https://github.com/esasmer-dou/java-rust-dubbo/releases/tag/v0.7.1)
+[![REST çizgisi](https://img.shields.io/badge/rust--java--rest-4.3.0-green.svg)](https://github.com/esasmer-dou/rust-java-rest/releases/tag/v4.3.0)
 
 `java-rust-dubbo`, Java/Rust REST framework içinde Dubbo provider çağırmak için hazırlanmış küçük ve kontrollü bir consumer kütüphanesidir.
 
@@ -17,6 +20,31 @@ fazla Dubbo interface'i tek bir deklaratif client seti içinde tanımlayabilirsi
 bean'leri aynı bounded transport lifecycle'ı paylaşır. Provider restart güvenliği ve yalnız seçilen
 `blocking` veya `tokio-demux` transport kaynaklarının açılması davranışı korunur.
 
+## Buradan Başlayın
+
+| İhtiyacınız | Başlangıç |
+| --- | --- |
+| Kubernetes Service DNS arkasında en düşük RSS consumer | Generated client, native static discovery ve `tokio-demux` |
+| Resmi Dubbo data plane olmadan ZooKeeper discovery | Generated client, ZooKeeper discovery ve native transport |
+| Tam Dubbo governance ve compatibility | Daha büyük JVM yüzeyini kabul ederek official mode |
+
+Çalışan consumer/provider çifti için
+[`rest-sample-dubbo-consumer`](https://github.com/esasmer-dou/rest-sample-dubbo-consumer) ve
+[`rest-sample-dubbo-provider`](https://github.com/esasmer-dou/rest-sample-dubbo-provider)
+projelerini kullanın.
+
+## İçindekiler
+
+- [Beş dakikada karar](#beş-dakikada-karar-verin)
+- [Maven dependency](#maven)
+- [Kullanılacak API sınırı](#kullanılacak-api-sınırı)
+- [Generated client başlangıcı](#hızlı-başlangıç)
+- [Property referansı](#property-referansı)
+- [Başlangıç profilleri](#başlangıç-profilleri)
+- [Native ve official mode](#native-mode-ve-official-mode-farkı)
+- [Native mode sınırları](#şu-an-bilerek-kapsam-dışı-bırakılanlar)
+- [Derleme ve artifact'ler](#derleme)
+
 ## Beş Dakikada Karar Verin
 
 | Ortamınız | Seçim | JVM'e eklenen yüzey |
@@ -32,6 +60,22 @@ kalır. Generated client; dynamic proxy ve tekrar eden method-plan maliyetini ka
 Yalnız provider'ın birden fazla replica'sı olduğu için ZooKeeper açmayın. Kubernetes Service, tek ve
 kararlı DNS adını replica'lar arasında load balance edebilir. Registry davranışı, provider metadata
 veya platformlar arası discovery gerçekten gerekiyorsa ZooKeeper kullanın.
+
+## İstek Akışı
+
+```mermaid
+flowchart LR
+    HTTP["HTTP client"] --> RH["Rust Hyper"]
+    RH --> J["Java handler ve service"]
+    J --> C["Generated Dubbo client"]
+    C --> NT["Sınırlı Rust Dubbo transport"]
+    NT --> P["Dubbo provider"]
+```
+
+Service kontratı, validation, iş kararı ve response seçimi Java'da kalır. Sınırlı client transport,
+connection reuse, timeout ve isteğe bağlı native response handle Rust tarafından yönetilir. Static
+discovery tek provider pod anlamına gelmez. Adres, birden fazla replica'yı yöneten Kubernetes
+Service olabilir.
 
 Bu kütüphane, "dependency ekleyince her şeyi otomatik yapsın" yaklaşımından bilinçli olarak uzak durur. Kurulum açık ve kontrollüdür. Bunun nedeni memory, thread ve latency davranışını üretim ortamında daha öngörülebilir yönetmektir.
 
@@ -121,7 +165,7 @@ Native modun çalışması için Java/Rust framework native library de yüklü o
 
 Native Dubbo transport, Dubbo native ABI `7` gerektirir. Güncel uyumlu kaynak runtime'ı REST ABI
 `26` ve Redis ABI `6` kullanır. Bu rehberde gösterilen yayınlanmış Maven sürümü
-`rust-java-rest:4.3.0` olarak kalır. Aynı build içinde paketlenen native artefact'i kullanın.
+`rust-java-rest:4.3.0` olarak kalır. Aynı build içinde paketlenen native artifact'i kullanın.
 Framework startup sırasında paketlenen kaynak revision ve platform hash bilgisini doğrular.
 `NativeDubboBridge` de ilk native client oluşturulmadan önce Dubbo ABI kontrolü yapar. Eski framework
 release'inden alınan DLL/SO dosyasını yeni image içine kopyalamayın.
@@ -410,7 +454,7 @@ kaydedilmeyeceğini belirler. Generated bean metodu, kendisini kullanan handler 
 koşulunu taşır. Kapalı client oluşturulmaz ve her RPC çağrısına yeni bir branch eklenmez. Aynı
 component hem açık hem kapalı modda çalışmak zorundaysa client'ı `Optional<T>` olarak alın.
 
-En küçük sabit-provider artefact'i için transport sınırını açıkça belirtin:
+En küçük sabit-provider artifact'i için transport sınırını açıkça belirtin:
 
 ```java
 @EnableNativeDubboClients(
@@ -424,8 +468,8 @@ final class NativeStaticClients {}
 
 `staticOnly=true`, ZooKeeper discovery seçilirse uygulamayı başlangıçta durdurur. Bu seçeneği
 `native-static` classifier ve full-Dubbo ile ZooKeeper kaynaklarını fiziksel olarak dışarıda bırakan
-bir Maven profile'ıyla birlikte kullanın. Runtime property tek bir genel artefact için yararlıdır.
-Ancak kullanılmayan sınıfları o artefact'ten çıkaramaz.
+bir Maven profile'ıyla birlikte kullanın. Runtime property tek bir genel artifact için yararlıdır.
+Ancak kullanılmayan sınıfları o artifact'ten çıkaramaz.
 
 Üretilen sınıfta `nestedCatalogJsonAsync()` gibi doğrudan metotlar bulunur. Dönüş tipi `byte[]` ise
 `nestedCatalogJsonNativeJsonAsync()` metodu da oluşur. Bu metot `NativeResponseHandle` döner. REST
@@ -706,6 +750,30 @@ Native mode şu özellikleri hedeflemez:
 - Tek connection üzerinde multiplexed request demux.
 
 Bu özellikler gerekiyorsa official mode veya ayrı bir Dubbo integration service daha doğru olur.
+
+## Production Kontrol Listesi
+
+- Generated client kullanın. Manuel invoker kurulumunu yalnız desteklenmeyen özel kontratlar için tutun.
+- Registry davranışı gerçek ihtiyaç değilse Kubernetes Service DNS ile static discovery kullanın.
+- İşlem açıkça idempotent değilse command çağrılarında retry değerini `0` tutun.
+- Timeout, max-in-flight, queue kapasitesi, connection ve route admission değerlerini birlikte sınırlayın.
+- Java body'yi incelemeyecek veya değiştirmeyecekse native response handle kullanın.
+- Dependency readiness kontrolünü process liveness kontrolünden ayırın.
+- Provider restart, endpoint kaybı, c64/c256 yük, p99, `503`, RSS ve yük sonrası idle testi yapın.
+- Eksik bir governance özelliği correctness için zorunluysa official mode kullanın. Business kodunda
+  eksik bir taklidini geliştirmeyin.
+
+## Kısa Sözlük
+
+| Terim | Basit anlamı |
+| --- | --- |
+| Discovery | Consumer'ın provider adreslerini nasıl aldığı |
+| Static discovery | Ayarlanmış adres veya Service DNS; arkasında birden fazla replica olabilir |
+| Native mode | Bilinçli olarak küçük tutulan Dubbo özellik setini kullanan Rust transport |
+| Official mode | Daha geniş uyumluluk ve daha büyük JVM yüzeyi sunan Apache Dubbo client runtime |
+| Demux | Async response'un request kimliğiyle eşleştirilmesi |
+| Bulkhead | Bir bağımlılığın bütün kapasiteyi tüketmesini engelleyen eşzamanlılık sınırı |
+| Native response handle | Provider body Java `byte[]` olmadan Rust belleğinden gönderilirken taşınan response kimliği |
 
 ## Derleme
 
