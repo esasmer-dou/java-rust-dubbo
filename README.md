@@ -2,8 +2,8 @@
 
 [English](README.md) | [Türkçe](README.tr.md)
 
-[![Version](https://img.shields.io/badge/version-0.7.1-blue.svg)](https://github.com/esasmer-dou/java-rust-dubbo/releases/tag/v0.7.1)
-[![REST line](https://img.shields.io/badge/rust--java--rest-4.3.0-green.svg)](https://github.com/esasmer-dou/rust-java-rest/releases/tag/v4.3.0)
+[![Version](https://img.shields.io/badge/version-0.7.2-blue.svg)](https://github.com/esasmer-dou/java-rust-dubbo/releases/tag/v0.7.2)
+[![REST line](https://img.shields.io/badge/rust--java--rest-4.4.0-green.svg)](https://github.com/esasmer-dou/rust-java-rest/releases/tag/v4.4.0)
 
 `java-rust-dubbo` is a small Dubbo consumer library for the Java/Rust REST framework.
 
@@ -16,7 +16,7 @@ The library keeps the programming model simple:
 - Dubbo calls can use a Rust native transport for lower JVM RSS.
 - ZooKeeper and the official Dubbo/Netty client stack are optional, not default requirements.
 
-The current aligned release is `java-rust-dubbo:0.7.1` with `rust-java-rest:4.3.0`. It adds one
+The current aligned release is `java-rust-dubbo:0.7.2` with `rust-java-rest:4.4.0`. It keeps one
 declarative client set, one shared bounded transport lifecycle, repeatable generated client
 declarations, and build-time validation. Existing provider restart handling and the exclusive
 `blocking` or `tokio-demux` transport planes remain in place.
@@ -95,7 +95,7 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.7.1</version>
+  <version>0.7.2</version>
 </dependency>
 ```
 
@@ -141,7 +141,7 @@ For the smallest static-provider native setup, use the `native-static` classifie
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.7.1</version>
+  <version>0.7.2</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -158,8 +158,8 @@ If you need ZooKeeper discovery, argument-bearing Dubbo methods, DTO decoding, o
 The Java/Rust framework native library must also be present. In `rust-java-rest`, the framework loads that native library for you. In standalone tests, make sure `rust_hyper` is available through `java.library.path`.
 
 Native Dubbo transport requires Dubbo native ABI `7`. The current aligned source runtime
-uses REST ABI `26` and Redis ABI `6`. The published Maven version shown in this guide remains
-`rust-java-rest:4.3.0`; use the native artifact packaged with the same build.
+uses REST ABI `28`, Redis ABI `6`, and Glowroot ABI `1`. The published Maven version shown in this
+guide is `rust-java-rest:4.4.0`; use the native artifact packaged with the same build.
 Framework startup verifies the packaged source revision and platform hash. `NativeDubboBridge` also
 checks the Dubbo ABI before the first native client is created. Do not copy a DLL/SO from an older
 framework release into a newer image.
@@ -389,7 +389,7 @@ runtime dependency surface:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.7.1</version>
+  <version>0.7.2</version>
   <classifier>codegen</classifier>
   <scope>provided</scope>
 </dependency>
@@ -402,7 +402,7 @@ Add the build-only classifier to `annotationProcessorPaths`:
   <path>
     <groupId>com.reactor</groupId>
     <artifactId>java-rust-dubbo</artifactId>
-    <version>0.7.1</version>
+    <version>0.7.2</version>
     <classifier>codegen</classifier>
   </path>
 </annotationProcessorPaths>
@@ -780,13 +780,13 @@ mvn clean verify
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-0.7.1.jar`
-- `java-rust-dubbo-0.7.1-native-static.jar`
-- `java-rust-dubbo-0.7.1-codegen.jar` (build time only)
-- `java-rust-dubbo-0.7.1-sources.jar`
+- `java-rust-dubbo-0.7.2.jar`
+- `java-rust-dubbo-0.7.2-native-static.jar`
+- `java-rust-dubbo-0.7.2-codegen.jar` (build time only)
+- `java-rust-dubbo-0.7.2-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v0.7.1.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.7.2.md)
 - [Turkish README](README.tr.md)
