@@ -80,6 +80,17 @@ public final class DubboProviderApplication {
             return builder.properties;
         }
 
+        public ModuleContext decorateDispatchers(ProviderDispatcherDecorator decorator) {
+            if (!builder.services.isEmpty()) {
+                throw new IllegalStateException("Configure dispatcher decoration before declaring services");
+            }
+            if (builder.dispatcherDecorator != null) {
+                throw new IllegalStateException("A dispatcher decorator is already configured");
+            }
+            builder.dispatcherDecorator = Objects.requireNonNull(decorator, "decorator");
+            return this;
+        }
+
         public <T> ModuleContext service(Class<T> serviceType, T implementation) {
             builder.service(serviceType, implementation);
             return this;
@@ -120,6 +131,7 @@ public final class DubboProviderApplication {
         private String shutdownThreadName = "dubbo-provider-shutdown";
         private boolean registryEnabled;
         private boolean started;
+        private ProviderDispatcherDecorator dispatcherDecorator;
 
         private Builder(DubboProviderSupport support, DubboApplicationProperties properties) {
             this.support = support;
@@ -213,7 +225,7 @@ public final class DubboProviderApplication {
                 List<DubboProviderSupport.ExportedService<?>> exported = support.exportAll(
                         config,
                         registration,
-                        List.copyOf(services.values()));
+                        List.copyOf(services.values()), dispatcherDecorator);
                 exported.forEach(resources::add);
                 support.logStartup(name, config, registryEnabled, exported);
 

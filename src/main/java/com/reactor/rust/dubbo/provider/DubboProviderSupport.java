@@ -78,13 +78,21 @@ public final class DubboProviderSupport {
             PlainDubboProvider.ProviderConfig config,
             DubboProviderRegistration registration,
             List<ServicePlan<?>> services) throws Exception {
+        return exportAll(config, registration, services, null);
+    }
+
+    List<ExportedService<?>> exportAll(
+            PlainDubboProvider.ProviderConfig config,
+            DubboProviderRegistration registration,
+            List<ServicePlan<?>> services,
+            ProviderDispatcherDecorator decorator) throws Exception {
         List<ExportedService<?>> exported = new ArrayList<>(services.size());
         try {
             for (ServicePlan<?> service : services) {
-                exported.add(exportOne(service, config, registration));
+                exported.add(exportOne(service, config, registration, decorator));
             }
             return Collections.unmodifiableList(exported);
-        } catch (Exception e) {
+        } catch (Exception | Error e) {
             closeAll(exported);
             throw e;
         }
@@ -137,15 +145,22 @@ public final class DubboProviderSupport {
     private <T> ExportedService<T> exportOne(
             ServicePlan<T> service,
             PlainDubboProvider.ProviderConfig config,
-            DubboProviderRegistration registration) throws Exception {
-        PlainDubboProvider<T> provider = PlainDubboProvider.export(
+            DubboProviderRegistration registration,
+            ProviderDispatcherDecorator decorator) throws Exception {
+        PlainDubboProvider<T> provider = decorator == null ? PlainDubboProvider.export(
                 service.serviceType(),
                 service.implementation(),
                 config,
                 registration,
                 service.executionConfig()
-        );
+        ) : PlainDubboProvider.export(service.serviceType(), service.implementation(), config,
+                registration, service.executionConfig(), prepareDispatcher(service, decorator));
         return new ExportedService<>(service.serviceType(), provider, service.executionConfig());
+    }
+
+    static <T> ProviderMethodDispatcher<T> prepareDispatcher(ServicePlan<T> service, ProviderDispatcherDecorator decorator) {
+        return Objects.requireNonNull(decorator.decorate(service.serviceType(),
+                MethodHandleProviderDispatcher.create(service.serviceType(), service.implementation())), "decorated dispatcher");
     }
 
     private PlainDubboProvider.ServiceExecutionConfig serviceExecutionConfig(Class<?> serviceType) {

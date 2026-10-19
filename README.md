@@ -4,7 +4,7 @@
 
 New usage guide: [Explicit, bounded operations](docs/functional-operations.md).
 
-[![Version](https://img.shields.io/badge/version-0.8.0-blue.svg)](https://github.com/esasmer-dou/java-rust-dubbo/releases/tag/v0.8.0)
+[![Version](https://img.shields.io/badge/version-0.8.1-blue.svg)](https://github.com/esasmer-dou/java-rust-dubbo/releases/tag/v0.8.1)
 [![REST line](https://img.shields.io/badge/rust--java--rest-4.7.0-green.svg)](https://github.com/esasmer-dou/rust-java-rest/releases/tag/v4.7.0)
 
 `java-rust-dubbo` is a small Dubbo consumer library for the Java/Rust REST framework.
@@ -18,7 +18,7 @@ The library keeps the programming model simple:
 - Dubbo calls can use a Rust native transport for lower JVM RSS.
 - ZooKeeper and the official Dubbo/Netty client stack are optional, not default requirements.
 
-The current aligned release is `java-rust-dubbo:0.8.0` with `rust-java-rest:4.7.0`. It keeps one
+The current aligned release is `java-rust-dubbo:0.8.1` with `rust-java-rest:4.7.0`. It keeps one
 declarative client set, one shared bounded transport lifecycle, repeatable generated client
 declarations, and build-time validation. Existing provider restart handling and the exclusive
 `blocking` or `tokio-demux` transport planes remain in place.
@@ -97,7 +97,7 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.8.0</version>
+  <version>0.8.1</version>
 </dependency>
 ```
 
@@ -143,7 +143,7 @@ For the smallest static-provider native setup, use the `native-static` classifie
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.8.0</version>
+  <version>0.8.1</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -391,7 +391,7 @@ runtime dependency surface:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.8.0</version>
+  <version>0.8.1</version>
   <classifier>codegen</classifier>
   <scope>provided</scope>
 </dependency>
@@ -404,7 +404,7 @@ Add the build-only classifier to `annotationProcessorPaths`:
   <path>
     <groupId>com.reactor</groupId>
     <artifactId>java-rust-dubbo</artifactId>
-    <version>0.8.0</version>
+    <version>0.8.1</version>
     <classifier>codegen</classifier>
   </path>
 </annotationProcessorPaths>
@@ -782,13 +782,13 @@ mvn clean verify
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-0.8.0.jar`
-- `java-rust-dubbo-0.8.0-native-static.jar`
-- `java-rust-dubbo-0.8.0-codegen.jar` (build time only)
-- `java-rust-dubbo-0.8.0-sources.jar`
+- `java-rust-dubbo-0.8.1.jar`
+- `java-rust-dubbo-0.8.1-native-static.jar`
+- `java-rust-dubbo-0.8.1-codegen.jar` (build time only)
+- `java-rust-dubbo-0.8.1-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v0.8.0.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.8.1.md)
 - [Turkish README](README.tr.md)
