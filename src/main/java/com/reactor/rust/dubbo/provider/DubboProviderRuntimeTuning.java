@@ -16,6 +16,10 @@ public final class DubboProviderRuntimeTuning {
         setIfConfigured(properties, "dubbo.security.serialize.allowedClassList");
         setIfAbsent(properties, "io.netty.allocator.numDirectArenas", "1");
         setIfAbsent(properties, "io.netty.allocator.numHeapArenas", "1");
+        setIfAbsent(properties, "io.netty.allocator.maxOrder", "3");
+        setIfAbsent(properties, "io.netty.allocator.smallCacheSize", "0");
+        setIfAbsent(properties, "io.netty.allocator.normalCacheSize", "0");
+        setIfAbsent(properties, "io.netty.allocator.useCacheForAllThreads", "false");
         setIfAbsent(properties, "io.netty.recycler.maxCapacityPerThread", "0");
         setIfAbsent(properties, "io.netty.noPreferDirect", "true");
         setIfAbsent(properties, "dubbo.application.logger", "slf4j");

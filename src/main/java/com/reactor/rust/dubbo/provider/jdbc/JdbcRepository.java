@@ -40,6 +40,10 @@ public abstract class JdbcRepository implements AutoCloseable {
         // Default: no schema bootstrap.
     }
 
+    protected final com.reactor.rust.jdbc.JdbcTransactions transactions() {
+        return new com.reactor.rust.jdbc.JdbcTransactions(dataSource, this::ensureInitialized);
+    }
+
     protected final <T> List<T> query(
             String operation,
             String sql,
