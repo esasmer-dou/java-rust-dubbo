@@ -6,14 +6,14 @@
 
 Sınırlı Tokio I/O havuzu ile Java tamamlama havuzu ayrıldı. Sabit bütçe içinde metadata kodlaması yeniden kullanılır. İstek argümanları ve yanıtlar cachelenmez. Ayrı native-provider modülleri deneysel kalır; varsayılan provider değildir.
 
-[Kullanım rehberi](docs/functional-operations.md) · [Sürüm notları](docs/RELEASE_NOTES_v0.9.0.md)
+[Kullanım rehberi](docs/functional-operations.tr.md) · [Sürüm notları](docs/RELEASE_NOTES_v0.9.0.tr.md)
 
 
 Yeni kullanım rehberi: [Açık ve sınırlı işlemler](docs/functional-operations.tr.md).
 
-### Ayrı Async Completion Havuzu (Kaynak Kod)
+### Ayrı Async Completion Havuzu (0.9.0)
 
-Kaynak koddaki `tokio-demux`, I/O worker sayısını kullanılabilir CPU bütçesi ve
+`tokio-demux`, I/O worker sayısını kullanılabilir CPU bütçesi ve
 ayarlanan worker üst sınırıyla sınırlar. Java tamamlama işleri ayrı ve sınırlı
 bir native havuzda çalışır. Bu havuz ayarlanan worker sayısını korur. Örneğin
 iki worker ayarı ve tek CPU ile bir I/O thread'i **ve iki completion thread'i**
@@ -38,8 +38,8 @@ Kuyrukta yer, RPC gönderilmeden ayrılır. Java devam işi bitince bırakılır
 gövdesi sınırı hem kuyruktaki hem çalıştırılan cevapları kapsar. Yavaş bir devam
 işi, sınırsız yanıt birikmesine yol açmaz. Gönderilmiş iş çağrısı tekrarlanmaz.
 Ek native thread'ler ayarladığınız native stack boyutunu kullanır. Bu özellik
-maliyetsiz değildir; yayımlanmış RSS/p99 garantisi değildir. Eşleşen kaynaklardan
-Java ve native artifact üretin. Dubbo ABI 7 ve servis annotation'ları değişmez.
+maliyetsiz değildir; her iş yükü için RSS/p99 garantisi vermez. Aynı sürümün Java
+ve native dosyalarını kullanın. Dubbo ABI 7 ve servis annotation'ları değişmez.
 
 Henüz yayımlanmamış deneysel provider çalışması
 [açık seçimli ortak motor adaptöründe](native-provider/README.tr.md)
@@ -214,7 +214,7 @@ ZooKeeper discovery, argümanlı Dubbo metotları, DTO decode, official Dubbo uy
 Native modun çalışması için Java/Rust framework native library de yüklü olmalıdır. `rust-java-rest` içinde bu native library framework tarafından yüklenir. Standalone testlerde `rust_hyper` kütüphanesini `java.library.path` ile görünür hale getirmek gerekir.
 
 Native Dubbo transport, Dubbo native ABI `7` gerektirir. Güncel uyumlu kaynak runtime'ı REST ABI
-`29`, Redis ABI `6` ve Glowroot ABI `3` kullanır. Bu rehberde gösterilen yayınlanmış Maven sürümü
+`29`, Redis ABI `6` ve Glowroot ABI `6` kullanır. Bu rehberde gösterilen yayınlanmış Maven sürümü
 `rust-java-rest:4.8.0` değeridir. Aynı koordineli ABI hattında paketlenen native artifact'i kullanın.
 Framework startup sırasında paketlenen kaynak revision ve platform hash bilgisini doğrular.
 `NativeDubboBridge` de ilk native client oluşturulmadan önce Dubbo ABI kontrolü yapar. Eski framework
@@ -425,7 +425,7 @@ public CompletableFuture<ResponseEntity<RawResponse>> catalog() {
 
 Bu akışta provider JSON body Java heap'e `byte[]` olarak alınmaz; Rust native tarafta tutulur ve Java tarafına sadece küçük bir response id gelir. Java handler response'u inceleyecek, dönüştürecek, validate edecek veya loglayacaksa eski `invokeAsync().thenApply(bytes -> RawResponse.json(bytes))` yolu hâlâ doğru ve desteklenen yoldur.
 
-Henüz yayımlanmayan sahiplik düzeltmesi: çağrı iptal edilirse, süresi dolarsa veya
+`0.9.0` sürümünde çağrı iptal edilirse, süresi dolarsa veya
 client kapanırsa geç gelen native yanıt kabul edilmez. Mevcut ABI 7 hata yolu bu
 yanıtın native belleğini hemen bırakır. Yeni worker veya temizleme kuyruğu
 eklenmez. Handler API'si değişmez.

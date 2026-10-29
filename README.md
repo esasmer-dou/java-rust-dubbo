@@ -11,9 +11,9 @@ Bounded Tokio I/O and Java completion pools are isolated. Metadata encoding is r
 
 New usage guide: [Explicit, bounded operations](docs/functional-operations.md).
 
-### Isolated Async Completions (Source Checkout)
+### Isolated Async Completions (0.9.0)
 
-The source `tokio-demux` transport caps I/O workers at the available CPU budget
+The `tokio-demux` transport caps I/O workers at the available CPU budget
 and the configured worker limit. A separate bounded native completion pool keeps
 the configured count. With two configured workers and one available CPU, this
 means one I/O thread **plus two completion threads**. A multi-CPU process can
@@ -39,7 +39,7 @@ continuation finishes. A separate body budget includes both queued and executing
 completions. A slow continuation cannot turn the completion queue into an
 unbounded collection of response bodies. Sent business calls are not replayed.
 The extra native threads use the configured native stack size. This is not a
-zero-cost feature or a published RSS/p99 guarantee. Use matching source-built
+zero-cost feature or a universal RSS/p99 guarantee. Use matching packaged
 Java/native artifacts; Dubbo ABI 7 and service annotations are unchanged.
 
 Unreleased experimental provider work is isolated in the
@@ -210,7 +210,7 @@ If you need ZooKeeper discovery, argument-bearing Dubbo methods, DTO decoding, o
 The Java/Rust framework native library must also be present. In `rust-java-rest`, the framework loads that native library for you. In standalone tests, make sure `rust_hyper` is available through `java.library.path`.
 
 Native Dubbo transport requires Dubbo native ABI `7`. The current aligned source runtime
-uses REST ABI `29`, Redis ABI `6`, and Glowroot ABI `3`. The published Maven version shown in this
+uses REST ABI `29`, Redis ABI `6`, and Glowroot ABI `6`. The published Maven version shown in this
 guide is `rust-java-rest:4.8.0`; use the native artifact packaged with the same coordinated ABI line.
 Framework startup verifies the packaged source revision and platform hash. `NativeDubboBridge` also
 checks the Dubbo ABI before the first native client is created. Do not copy a DLL/SO from an older
@@ -432,7 +432,7 @@ public CompletableFuture<ResponseEntity<RawResponse>> catalog() {
 
 This keeps the provider JSON body in Rust native memory and sends only a small response id through Java. Use the older `invokeAsync().thenApply(bytes -> RawResponse.json(bytes))` path when the Java handler must inspect, transform, validate, or log the response bytes.
 
-Unreleased ownership fix: if a call is cancelled, expires, or its client closes
+In `0.9.0`, if a call is cancelled, expires, or its client closes
 before the native response arrives, the callback rejects that response. The
 existing ABI 7 failure path then releases its native body immediately. This adds
 no worker or cleanup queue and does not change the handler API.
