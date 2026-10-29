@@ -1,0 +1,20 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
+  <groupId>com.reactor</groupId><artifactId>java-rust-dubbo-native-provider</artifactId><version>0.9.0</version>
+  <properties><maven.compiler.release>21</maven.compiler.release><project.build.sourceEncoding>UTF-8</project.build.sourceEncoding></properties>
+  <dependencies>
+    <dependency><groupId>com.reactor</groupId><artifactId>java-rust-dubbo</artifactId><version>0.9.0</version>
+      <exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions>
+    </dependency>
+    <dependency><groupId>com.reactor</groupId><artifactId>java-rust-dubbo-runtime</artifactId><version>0.8.0</version></dependency>
+    <dependency><groupId>com.reactor</groupId><artifactId>java-rust-dubbo-native-provider-codegen</artifactId><version>0.9.0</version><scope>test</scope></dependency>
+    <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>5.11.4</version><scope>test</scope></dependency>
+    <dependency><groupId>com.reactor.sample</groupId><artifactId>rest-sample-utility</artifactId><version>0.5.0</version><scope>test</scope></dependency>
+  </dependencies>
+  <build><plugins>
+    <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId><version>3.13.0</version>
+      <configuration><proc>none</proc></configuration>
+      <executions><execution><id>default-testCompile</id><configuration><proc>full</proc><annotationProcessors><annotationProcessor>com.reactor.rust.dubbo.nativeprovider.codegen.NativeProviderProcessor</annotationProcessor></annotationProcessors></configuration></execution></executions>
+    </plugin>
+    <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId><version>3.5.2</version></plugin>
+  </plugins></build>
+</project>

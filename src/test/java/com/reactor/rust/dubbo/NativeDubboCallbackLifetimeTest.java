@@ -56,7 +56,15 @@ class NativeDubboCallbackLifetimeTest {
                 client, new byte[]{1}, 1000).get(3, TimeUnit.SECONDS));
     }
 
+    static void respondJson(Socket peer) {
+        respond(peer, new byte[]{(byte) 0x91, 0x22, '{', '}'});
+    }
+
     private static void respond(Socket peer) {
+        respond(peer, new byte[]{1, 2, 3});
+    }
+
+    private static void respond(Socket peer, byte[] response) {
         try (peer) {
             peer.setTcpNoDelay(true);
             var in = new DataInputStream(peer.getInputStream());
@@ -71,9 +79,9 @@ class NativeDubboCallbackLifetimeTest {
                 if (request.length != length) throw new java.io.EOFException();
                 header[2] = 2;
                 header[3] = (byte)(request[0] == 0 ? 70 : 20);
-                ByteBuffer.wrap(header).putInt(12, 3);
+                ByteBuffer.wrap(header).putInt(12, response.length);
                 out.write(header);
-                out.write(new byte[]{1,2,3});
+                out.write(response);
                 out.flush();
             }
         } catch (java.io.IOException closed) {

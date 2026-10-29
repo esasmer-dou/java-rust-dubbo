@@ -2,10 +2,60 @@
 
 [English](README.md) | [Türkçe](README.tr.md)
 
+## Start With 0.9.0
+
+Bounded Tokio I/O and Java completion pools are isolated. Metadata encoding is reused within a fixed budget; request arguments and responses are not cached. The separate native-provider modules remain experimental and are not the default provider.
+
+[Usage guide](docs/functional-operations.md) · [Release notes](docs/RELEASE_NOTES_v0.9.0.md)
+
+
 New usage guide: [Explicit, bounded operations](docs/functional-operations.md).
 
-[![Version](https://img.shields.io/badge/version-0.8.1-blue.svg)](https://github.com/esasmer-dou/java-rust-dubbo/releases/tag/v0.8.1)
-[![REST line](https://img.shields.io/badge/rust--java--rest-4.7.0-green.svg)](https://github.com/esasmer-dou/rust-java-rest/releases/tag/v4.7.0)
+### Isolated Async Completions (Source Checkout)
+
+The source `tokio-demux` transport caps I/O workers at the available CPU budget
+and the configured worker limit. A separate bounded native completion pool keeps
+the configured count. With two configured workers and one available CPU, this
+means one I/O thread **plus two completion threads**. A multi-CPU process can
+use both I/O workers.
+Only completion threads attach to the JVM. No Java executor or Hyper worker is
+used. Blocking transport is unchanged. When `tokio-demux` is not selected, these
+async pools are not created. Selecting it eagerly starts the bounded completion
+pool, even before the first business call.
+
+For a configured Tokio client, completion workers attach to the JVM before the
+client is returned. Thread startup and the two immutable JSON metadata strings
+are not deferred to its first RPC. This does not invoke a provider business method.
+
+Rust still enforces each RPC deadline. The Java lost-callback safety guard uses
+one shared check while calls are pending, instead of one timer and cleanup callback
+per RPC. It reuses the JDK's delayed-completion facility; there is no new Java
+executor. The guard keeps its existing extra one-second grace period, with up to
+50 ms check granularity. Normal RPC timeouts are not increased. Checking stops
+when no calls remain.
+
+Queue capacity is reserved before sending an RPC and released after the Java
+continuation finishes. A separate body budget includes both queued and executing
+completions. A slow continuation cannot turn the completion queue into an
+unbounded collection of response bodies. Sent business calls are not replayed.
+The extra native threads use the configured native stack size. This is not a
+zero-cost feature or a published RSS/p99 guarantee. Use matching source-built
+Java/native artifacts; Dubbo ABI 7 and service annotations are unchanged.
+
+Unreleased experimental provider work is isolated in the
+[explicit shared-engine adapter](native-provider/README.md)
+([Turkish](native-provider/README.tr.md)). It is opt-in, not the default provider,
+and reuses the published native engine; it does not implement an acceptor in
+`rust-spring`. Current private DLL/SO builds include bounded connection, response
+and wire-byte admission. Phase 6 is not production accepted: shared-parser
+hardening, the stricter fully lock-free criterion and the full acceptance matrix
+remain open. The preexisting native response registry retains a blocking mutex.
+No RSS or performance acceptance is claimed.
+The new parser-policy source is untested and not in the last verified DLL/SO;
+the new factory requires its capability gauges and rejects those older binaries.
+
+[![Version](https://img.shields.io/badge/version-0.9.0-blue.svg)](https://github.com/esasmer-dou/java-rust-dubbo/releases/tag/v0.9.0)
+[![REST line](https://img.shields.io/badge/rust--java--rest-4.8.0-green.svg)](https://github.com/esasmer-dou/rust-java-rest/releases/tag/v4.8.0)
 
 `java-rust-dubbo` is a small Dubbo consumer library for the Java/Rust REST framework.
 
@@ -18,7 +68,7 @@ The library keeps the programming model simple:
 - Dubbo calls can use a Rust native transport for lower JVM RSS.
 - ZooKeeper and the official Dubbo/Netty client stack are optional, not default requirements.
 
-The current aligned release is `java-rust-dubbo:0.8.1` with `rust-java-rest:4.7.0`. It keeps one
+The current aligned release is `java-rust-dubbo:0.9.0` with `rust-java-rest:4.8.0`. It keeps one
 declarative client set, one shared bounded transport lifecycle, repeatable generated client
 declarations, and build-time validation. Existing provider restart handling and the exclusive
 `blocking` or `tokio-demux` transport planes remain in place.
@@ -97,7 +147,7 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.8.1</version>
+  <version>0.9.0</version>
 </dependency>
 ```
 
@@ -143,7 +193,7 @@ For the smallest static-provider native setup, use the `native-static` classifie
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.8.1</version>
+  <version>0.9.0</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -161,7 +211,7 @@ The Java/Rust framework native library must also be present. In `rust-java-rest`
 
 Native Dubbo transport requires Dubbo native ABI `7`. The current aligned source runtime
 uses REST ABI `29`, Redis ABI `6`, and Glowroot ABI `3`. The published Maven version shown in this
-guide is `rust-java-rest:4.7.0`; use the native artifact packaged with the same coordinated ABI line.
+guide is `rust-java-rest:4.8.0`; use the native artifact packaged with the same coordinated ABI line.
 Framework startup verifies the packaged source revision and platform hash. `NativeDubboBridge` also
 checks the Dubbo ABI before the first native client is created. Do not copy a DLL/SO from an older
 framework release into a newer image.
@@ -382,6 +432,13 @@ public CompletableFuture<ResponseEntity<RawResponse>> catalog() {
 
 This keeps the provider JSON body in Rust native memory and sends only a small response id through Java. Use the older `invokeAsync().thenApply(bytes -> RawResponse.json(bytes))` path when the Java handler must inspect, transform, validate, or log the response bytes.
 
+Unreleased ownership fix: if a call is cancelled, expires, or its client closes
+before the native response arrives, the callback rejects that response. The
+existing ABI 7 failure path then releases its native body immediately. This adds
+no worker or cleanup queue and does not change the handler API.
+This releases response ownership; the native allocator may retain freed pages.
+It does not run allocator trimming on the request path or guarantee an immediate RSS drop.
+
 ### 4. Generate The Native Client At Build Time (Recommended)
 
 Add the small build-only classifier to the consuming application. `provided` keeps it out of the
@@ -391,7 +448,7 @@ runtime dependency surface:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.8.1</version>
+  <version>0.9.0</version>
   <classifier>codegen</classifier>
   <scope>provided</scope>
 </dependency>
@@ -404,7 +461,7 @@ Add the build-only classifier to `annotationProcessorPaths`:
   <path>
     <groupId>com.reactor</groupId>
     <artifactId>java-rust-dubbo</artifactId>
-    <version>0.8.1</version>
+    <version>0.9.0</version>
     <classifier>codegen</classifier>
   </path>
 </annotationProcessorPaths>
@@ -776,19 +833,34 @@ For many REST-to-Dubbo consumer cases this is enough. If your system depends on 
 
 ## Build
 
+### Typed Request Codec Memory
+
+Typed calls keep their Java argument/result contract. The optional Hessian codec
+reuses at most two request encoder states per process, rather than retaining a
+buffer for every caller thread. Concurrent or reentrant calls never share an active
+encoder. Excess states are temporary; failed and oversized states are not pooled.
+Object references and serializer-factory references are cleared before reuse.
+
+`reactor.dubbo.hessian.request-buffer-initial-bytes` (default `256`) and
+`reactor.dubbo.hessian.request-buffer-retain-max-bytes` (default `4096`) still size
+the request byte accumulator. The retain value is not a maximum RPC payload size.
+Larger requests remain supported; their encoder state is discarded afterwards.
+This reduces encoding allocation, not the size of result DTOs or JVM JIT memory.
+Native-only contracts do not load this optional Hessian implementation.
+
 ```powershell
 mvn clean verify
 ```
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-0.8.1.jar`
-- `java-rust-dubbo-0.8.1-native-static.jar`
-- `java-rust-dubbo-0.8.1-codegen.jar` (build time only)
-- `java-rust-dubbo-0.8.1-sources.jar`
+- `java-rust-dubbo-0.9.0.jar`
+- `java-rust-dubbo-0.9.0-native-static.jar`
+- `java-rust-dubbo-0.9.0-codegen.jar` (build time only)
+- `java-rust-dubbo-0.9.0-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v0.8.1.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.9.0.md)
 - [Turkish README](README.tr.md)

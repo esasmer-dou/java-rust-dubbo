@@ -118,4 +118,5 @@ public abstract class JdbcRepository implements AutoCloseable {
     public interface RowMapper<T> {
         T map(ResultSet row) throws Exception;
     }
+
 }

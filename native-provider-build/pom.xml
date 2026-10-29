@@ -1,0 +1,4 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
+  <groupId>com.reactor</groupId><artifactId>java-rust-dubbo-native-provider-build</artifactId><version>0.9.0</version><packaging>pom</packaging>
+  <modules><module>../native-provider-codegen</module><module>../native-provider</module></modules>
+</project>

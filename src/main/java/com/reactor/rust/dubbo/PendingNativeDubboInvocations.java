@@ -3,12 +3,25 @@ package com.reactor.rust.dubbo;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
 
 final class PendingNativeDubboInvocations {
 
     private final AtomicLong callbackIds = new AtomicLong(1);
     private final ConcurrentHashMap<Long, PendingInvoke<?>> pending = new ConcurrentHashMap<>();
+    private final AtomicBoolean guardActive = new AtomicBoolean();
+    private final AtomicLong guardTasks = new AtomicLong();
+    private final BiConsumer<Void, Throwable> guardAction = (ignored, error) -> {
+        try {
+            expirePending(System.nanoTime());
+        } finally {
+            guardActive.set(false);
+            if (!pending.isEmpty()) startGuard();
+        }
+    };
 
     PendingCall begin(int clientId) {
         long callbackId = nextCallbackId();
@@ -33,10 +46,44 @@ final class PendingNativeDubboInvocations {
     }
 
     private void accepted(long callbackId, CompletableFuture<?> future, int timeoutMs) {
+        PendingInvoke<?> invocation = pending.get(callbackId);
+        if (invocation == null) return; // A fast native completion already removed it.
         long guardTimeoutMs = Math.max(1L, timeoutMs) + 1_000L;
-        future
-                .orTimeout(guardTimeoutMs, TimeUnit.MILLISECONDS)
-                .whenComplete((ignored, error) -> pending.remove(callbackId));
+        invocation.guardDeadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(guardTimeoutMs);
+        if (future.isDone()) pending.remove(callbackId, invocation);
+        else startGuard();
+    }
+
+    // Rust owns the RPC deadline. This is the existing +1s lost-callback guard,
+    // shared across active calls instead of allocating/cancelling a timer per RPC.
+    private void startGuard() {
+        if (guardActive.compareAndSet(false, true)) {
+            guardTasks.incrementAndGet();
+            new CompletableFuture<Void>()
+                    .completeOnTimeout(null, 50, TimeUnit.MILLISECONDS)
+                    .whenComplete(guardAction);
+        }
+    }
+
+    void primeGuard() {
+        startGuard();
+    }
+
+    void expirePending(long nowNanos) {
+        for (var entry : pending.entrySet()) {
+            PendingInvoke<?> invocation = entry.getValue();
+            if (invocation.future().isDone()) {
+                pending.remove(entry.getKey(), invocation);
+            } else if (invocation.guardDeadlineNanos != 0
+                    && nowNanos - invocation.guardDeadlineNanos >= 0
+                    && pending.remove(entry.getKey(), invocation)) {
+                invocation.future().completeExceptionally(new TimeoutException());
+            }
+        }
+    }
+
+    long guardTasksForTest() {
+        return guardTasks.get();
     }
 
     void rejected(PendingCall call, String message) {
@@ -84,7 +131,7 @@ final class PendingNativeDubboInvocations {
     }
 
     @SuppressWarnings("unchecked")
-    void completeNativeResponse(
+    boolean completeNativeResponse(
             long callbackId,
             int nativeResponseId,
             int statusCode,
@@ -93,10 +140,10 @@ final class PendingNativeDubboInvocations {
             String errorMessage) {
         PendingInvoke<?> invocation = pending.remove(callbackId);
         if (invocation == null) {
-            return;
+            return false;
         }
         if (errorMessage == null && nativeResponseId > 0) {
-            ((CompletableFuture<NativeResponseHandle>) invocation.future()).complete(
+            return ((CompletableFuture<NativeResponseHandle>) invocation.future()).complete(
                     new NativeResponseHandle(nativeResponseId, statusCode, contentType, headers));
         } else if (errorMessage == null) {
             invocation.future().completeExceptionally(new DubboConsumerException(
@@ -104,6 +151,7 @@ final class PendingNativeDubboInvocations {
         } else {
             invocation.future().completeExceptionally(new DubboConsumerException(errorMessage));
         }
+        return false;
     }
 
     void closeClient(int clientId, RuntimeException error) {
@@ -131,5 +179,17 @@ final class PendingNativeDubboInvocations {
 
     record PendingNativeResponseCall(long callbackId, CompletableFuture<NativeResponseHandle> future) {}
 
-    private record PendingInvoke<T>(int clientId, CompletableFuture<T> future) {}
+    private static final class PendingInvoke<T> {
+        private final int clientId;
+        private final CompletableFuture<T> future;
+        private volatile long guardDeadlineNanos;
+
+        private PendingInvoke(int clientId, CompletableFuture<T> future) {
+            this.clientId = clientId;
+            this.future = future;
+        }
+
+        int clientId() { return clientId; }
+        CompletableFuture<T> future() { return future; }
+    }
 }

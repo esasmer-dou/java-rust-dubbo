@@ -87,6 +87,7 @@ public final class NativeDubboBridge {
         }
         nativeConfigureAsync(workers, queueCapacity, threadStackBytes);
         nativeConfigureAsyncTransport(requested.transport());
+        PENDING.primeGuard();
         asyncConfig = requested;
     }
 
@@ -323,11 +324,24 @@ public final class NativeDubboBridge {
             String contentType,
             String headers,
             String errorMessage) {
-        PENDING.completeNativeResponse(callbackId, nativeResponseId, statusCode, contentType, headers, errorMessage);
+        boolean owned = PENDING.completeNativeResponse(
+                callbackId, nativeResponseId, statusCode, contentType, headers, errorMessage);
+        if (!owned && nativeResponseId > 0) {
+            // ABI 7 already releases a registered response when this JNI callback
+            // fails. Never silently accept ownership after cancellation/expiry.
+            throw UnclaimedNativeResponse.INSTANCE;
+        }
     }
 
     static int pendingCountForTest() {
         return PENDING.size();
+    }
+
+    private static final class UnclaimedNativeResponse extends RuntimeException {
+        private static final UnclaimedNativeResponse INSTANCE = new UnclaimedNativeResponse();
+        private UnclaimedNativeResponse() {
+            super("Native response has no pending Java owner", null, false, false);
+        }
     }
 
     private record AsyncConfig(int workers, int queueCapacity, String transport, int threadStackBytes) {

@@ -2,10 +2,58 @@
 
 [English](README.md) | [Türkçe](README.tr.md)
 
+## 0.9.0 İle Başlayın
+
+Sınırlı Tokio I/O havuzu ile Java tamamlama havuzu ayrıldı. Sabit bütçe içinde metadata kodlaması yeniden kullanılır. İstek argümanları ve yanıtlar cachelenmez. Ayrı native-provider modülleri deneysel kalır; varsayılan provider değildir.
+
+[Kullanım rehberi](docs/functional-operations.md) · [Sürüm notları](docs/RELEASE_NOTES_v0.9.0.md)
+
+
 Yeni kullanım rehberi: [Açık ve sınırlı işlemler](docs/functional-operations.tr.md).
 
-[![Sürüm](https://img.shields.io/badge/sürüm-0.8.1-blue.svg)](https://github.com/esasmer-dou/java-rust-dubbo/releases/tag/v0.8.1)
-[![REST çizgisi](https://img.shields.io/badge/rust--java--rest-4.7.0-green.svg)](https://github.com/esasmer-dou/rust-java-rest/releases/tag/v4.7.0)
+### Ayrı Async Completion Havuzu (Kaynak Kod)
+
+Kaynak koddaki `tokio-demux`, I/O worker sayısını kullanılabilir CPU bütçesi ve
+ayarlanan worker üst sınırıyla sınırlar. Java tamamlama işleri ayrı ve sınırlı
+bir native havuzda çalışır. Bu havuz ayarlanan worker sayısını korur. Örneğin
+iki worker ayarı ve tek CPU ile bir I/O thread'i **ve iki completion thread'i**
+kullanılır. Birden fazla CPU varsa iki I/O worker'ı da kullanılabilir.
+Yalnız completion thread'leri JVM'e bağlanır.
+Java executor'ı veya Hyper worker'ı kullanılmaz. Blocking transport değişmez.
+`tokio-demux` seçilmezse bu async havuzlar oluşturulmaz. Seçilirse sınırlı
+tamamlama havuzu ilk iş çağrısı beklenmeden başlatılır.
+
+Tokio client hazır dönmeden completion thread'leri JVM'e bağlanır. Thread
+başlangıcı ve iki sabit JSON metadata String'i ilk RPC'ye bırakılmaz. Bunun için
+provider'a deneme amaçlı bir iş çağrısı yapılmaz.
+
+Gerçek RPC deadline'ını yine Rust uygular. Java tarafındaki kayıp callback
+koruması, her çağrı için ayrı timer ve temizleme callback'i oluşturmaz. Bekleyen
+çağrılar ortak bir denetimle izlenir. JDK'nın gecikmeli tamamlama olanağı kullanılır;
+yeni Java executor'ı açılmaz. Mevcut bir saniyelik ek koruma süresi korunur.
+Kontrol aralığı en fazla 50 ms ek hassasiyet farkı oluşturur. Gerçek RPC timeout'u
+artırılmaz. Bekleyen çağrı kalmayınca denetim durur.
+
+Kuyrukta yer, RPC gönderilmeden ayrılır. Java devam işi bitince bırakılır. Yanıt
+gövdesi sınırı hem kuyruktaki hem çalıştırılan cevapları kapsar. Yavaş bir devam
+işi, sınırsız yanıt birikmesine yol açmaz. Gönderilmiş iş çağrısı tekrarlanmaz.
+Ek native thread'ler ayarladığınız native stack boyutunu kullanır. Bu özellik
+maliyetsiz değildir; yayımlanmış RSS/p99 garantisi değildir. Eşleşen kaynaklardan
+Java ve native artifact üretin. Dubbo ABI 7 ve servis annotation'ları değişmez.
+
+Henüz yayımlanmamış deneysel provider çalışması
+[açık seçimli ortak motor adaptöründe](native-provider/README.tr.md)
+([English](native-provider/README.md)) ayrıdır. Varsayılan provider değildir;
+yayımlanmış native motoru kullanır, `rust-spring` içinde acceptor uygulamaz.
+Güncel private DLL/SO derlemeleri bağlantı, response ve wire-byte kabul sınırlarını
+içerir. Phase 6 production kabul edilmedi: ortak parser güvenliği, daha sıkı tamamen
+lock-free ölçütü ve bütün kabul matrisi açıktır. Mevcut native response kayıt tablosu
+blocking mutex kullanmaya devam eder. RSS veya performans kabulü iddiası yoktur.
+Yeni parser politikası test edilmemiş kaynak değişikliğidir; son doğrulanmış
+DLL/SO içinde yoktur. Yeni factory bu yetenek metriklerini arar ve eski dosyaları reddeder.
+
+[![Sürüm](https://img.shields.io/badge/sürüm-0.9.0-blue.svg)](https://github.com/esasmer-dou/java-rust-dubbo/releases/tag/v0.9.0)
+[![REST çizgisi](https://img.shields.io/badge/rust--java--rest-4.8.0-green.svg)](https://github.com/esasmer-dou/rust-java-rest/releases/tag/v4.8.0)
 
 `java-rust-dubbo`, Java/Rust REST framework içinde Dubbo provider çağırmak için hazırlanmış küçük ve kontrollü bir consumer kütüphanesidir.
 
@@ -17,7 +65,7 @@ Kullanım modeli basittir:
 - İsterseniz Dubbo TCP data-plane Rust tarafında çalışır; böylece consumer JVM daha küçük kalır.
 - ZooKeeper, Netty ve resmi Dubbo client stack varsayılan olarak zorunlu değildir.
 
-Güncel uyumlu sürüm çizgisi `java-rust-dubbo:0.8.1` ve `rust-java-rest:4.7.0` şeklindedir. Birden
+Güncel uyumlu sürüm çizgisi `java-rust-dubbo:0.9.0` ve `rust-java-rest:4.8.0` şeklindedir. Birden
 fazla Dubbo interface'i tek bir deklaratif client seti içinde tanımlayabilirsiniz. Generated client
 bean'leri aynı bounded transport lifecycle'ı paylaşır. Provider restart güvenliği ve yalnız seçilen
 `blocking` veya `tokio-demux` transport kaynaklarının açılması davranışı korunur.
@@ -103,7 +151,7 @@ Bu kütüphane, "dependency ekleyince her şeyi otomatik yapsın" yaklaşımınd
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.8.1</version>
+  <version>0.9.0</version>
 </dependency>
 ```
 
@@ -149,7 +197,7 @@ En küçük static-provider native kurulum için full JAR yerine `native-static`
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.8.1</version>
+  <version>0.9.0</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -167,7 +215,7 @@ Native modun çalışması için Java/Rust framework native library de yüklü o
 
 Native Dubbo transport, Dubbo native ABI `7` gerektirir. Güncel uyumlu kaynak runtime'ı REST ABI
 `29`, Redis ABI `6` ve Glowroot ABI `3` kullanır. Bu rehberde gösterilen yayınlanmış Maven sürümü
-`rust-java-rest:4.7.0` değeridir. Aynı koordineli ABI hattında paketlenen native artifact'i kullanın.
+`rust-java-rest:4.8.0` değeridir. Aynı koordineli ABI hattında paketlenen native artifact'i kullanın.
 Framework startup sırasında paketlenen kaynak revision ve platform hash bilgisini doğrular.
 `NativeDubboBridge` de ilk native client oluşturulmadan önce Dubbo ABI kontrolü yapar. Eski framework
 release'inden alınan DLL/SO dosyasını yeni image içine kopyalamayın.
@@ -377,6 +425,13 @@ public CompletableFuture<ResponseEntity<RawResponse>> catalog() {
 
 Bu akışta provider JSON body Java heap'e `byte[]` olarak alınmaz; Rust native tarafta tutulur ve Java tarafına sadece küçük bir response id gelir. Java handler response'u inceleyecek, dönüştürecek, validate edecek veya loglayacaksa eski `invokeAsync().thenApply(bytes -> RawResponse.json(bytes))` yolu hâlâ doğru ve desteklenen yoldur.
 
+Henüz yayımlanmayan sahiplik düzeltmesi: çağrı iptal edilirse, süresi dolarsa veya
+client kapanırsa geç gelen native yanıt kabul edilmez. Mevcut ABI 7 hata yolu bu
+yanıtın native belleğini hemen bırakır. Yeni worker veya temizleme kuyruğu
+eklenmez. Handler API'si değişmez.
+Burada yanıtın bellek sahipliği bırakılır. Native allocator boşalan sayfaları bir
+süre tutabilir. İstek yolunda allocator trim çalışmaz; RSS'in hemen düşmesi garanti edilmez.
+
 ### 4. Native Client'i Build Sırasında Üretin (Önerilen Yol)
 
 Küçük build-only classifier'ı consumer uygulamasına ekleyin. `provided` scope, processor sınıflarının
@@ -386,7 +441,7 @@ runtime dependency yüzeyine girmesini önler:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.8.1</version>
+  <version>0.9.0</version>
   <classifier>codegen</classifier>
   <scope>provided</scope>
 </dependency>
@@ -399,7 +454,7 @@ Build-only classifier'ı `annotationProcessorPaths` içine ekleyin:
   <path>
     <groupId>com.reactor</groupId>
     <artifactId>java-rust-dubbo</artifactId>
-    <version>0.8.1</version>
+    <version>0.9.0</version>
     <classifier>codegen</classifier>
   </path>
 </annotationProcessorPaths>
@@ -779,15 +834,30 @@ Bu özellikler gerekiyorsa official mode veya ayrı bir Dubbo integration servic
 
 ## Derleme
 
+### Tipli İsteklerde Codec Belleği
+
+Tipli çağrılarda Java parametre ve sonuç sözleşmesi değişmez. İsteğe bağlı Hessian
+codec, her çağıran thread için buffer tutmak yerine process başına en fazla iki
+istek encoder'ını yeniden kullanır. Eşzamanlı çağrılar aynı aktif encoder'ı paylaşmaz.
+Havuz doluysa çağrı kendine ait geçici encoder kullanır. Hatalı veya büyük istekten
+kalan encoder havuza dönmez. Nesne ve serializer-factory referansları temizlenir.
+
+`reactor.dubbo.hessian.request-buffer-initial-bytes` varsayılan `256`,
+`reactor.dubbo.hessian.request-buffer-retain-max-bytes` varsayılan `4096` byte'tır.
+Bu ayarlar istek byte buffer'ına aittir. İkinci değer RPC payload üst sınırı değildir.
+Büyük istek çalışır; ardından encoder havuza alınmaz. Bu düzenleme encode tahsisatını
+azaltır. Sonuç DTO'larının veya JVM JIT'in belleğini ortadan kaldırmaz. Native-only
+sözleşmeler bu isteğe bağlı Hessian uygulamasını yüklemez.
+
 ```powershell
 mvn clean verify
 ```
 
 Üretilen paketler:
 
-- `target/java-rust-dubbo-0.8.1.jar`
-- `target/java-rust-dubbo-0.8.1-native-static.jar`
-- `target/java-rust-dubbo-0.8.1-codegen.jar` (yalnızca derleme sırasında kullanılır)
-- `target/java-rust-dubbo-0.8.1-sources.jar`
+- `target/java-rust-dubbo-0.9.0.jar`
+- `target/java-rust-dubbo-0.9.0-native-static.jar`
+- `target/java-rust-dubbo-0.9.0-codegen.jar` (yalnızca derleme sırasında kullanılır)
+- `target/java-rust-dubbo-0.9.0-sources.jar`
 
-Sürüm ayrıntıları: [java-rust-dubbo 0.8.1](docs/RELEASE_NOTES_v0.8.1.tr.md).
+Sürüm ayrıntıları: [java-rust-dubbo 0.9.0](docs/RELEASE_NOTES_v0.9.0.tr.md).

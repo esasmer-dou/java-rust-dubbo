@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 
 public final class NativeDubboCodec {
 
@@ -30,8 +31,8 @@ public final class NativeDubboCodec {
             "reactor.dubbo.hessian.request-buffer-retain-max-bytes",
             4 * 1024
     );
-    private static final ThreadLocal<ReusableByteArrayOutputStream> REQUEST_BUFFER =
-            ThreadLocal.withInitial(() -> new ReusableByteArrayOutputStream(REQUEST_BUFFER_INITIAL_BYTES));
+    // A process bound, not a ThreadLocal: arbitrary caller/virtual threads cannot grow retention.
+    private static final AtomicReferenceArray<RequestCodec> REQUEST_CODECS = new AtomicReferenceArray<>(2);
     private static final ConcurrentHashMap<String, Map<String, Object>> ATTACHMENTS_CACHE =
             new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<ClassLoader, SerializerFactory> SERIALIZER_FACTORIES =
@@ -40,10 +41,13 @@ public final class NativeDubboCodec {
     private NativeDubboCodec() {}
 
     public static byte[] encodeRequest(MethodPlan plan, Object[] args, int timeoutMs) {
+        RequestCodec codec = borrowRequestCodec();
+        boolean reusable = false;
         try {
-            ReusableByteArrayOutputStream bytes = REQUEST_BUFFER.get();
+            ReusableByteArrayOutputStream bytes = codec.bytes;
             bytes.reset();
-            Hessian2Output out = new Hessian2Output(bytes);
+            Hessian2Output out = codec.output;
+            out.init(bytes);
             out.setSerializerFactory(serializerFactory(plan));
             out.writeString(DUBBO_PROTOCOL_VERSION);
             out.writeString(plan.serviceName);
@@ -56,14 +60,31 @@ public final class NativeDubboCodec {
             out.writeObject(attachments(plan, timeoutMs));
             out.flush();
             byte[] encoded = bytes.toByteArray();
-            if (bytes.capacity() > REQUEST_BUFFER_RETAIN_MAX_BYTES) {
-                REQUEST_BUFFER.set(new ReusableByteArrayOutputStream(REQUEST_BUFFER_INITIAL_BYTES));
-            }
+            reusable = bytes.capacity() <= REQUEST_BUFFER_RETAIN_MAX_BYTES;
             return encoded;
         } catch (IOException e) {
             throw new DubboConsumerException("Failed to encode native Dubbo request for "
                     + plan.serviceName + "." + plan.methodName, e);
+        } finally {
+            // free() clears object/class references and detaches the output stream, even on failure.
+            codec.output.free();
+            codec.output.setSerializerFactory(null);
+            codec.bytes.reset();
+            if (reusable) {
+                for (int slot = 0; slot < REQUEST_CODECS.length(); slot++) {
+                    if (REQUEST_CODECS.compareAndSet(slot, null, codec)) break;
+                }
+            }
         }
+    }
+
+    private static RequestCodec borrowRequestCodec() {
+        for (int slot = 0; slot < REQUEST_CODECS.length(); slot++) {
+            RequestCodec codec = REQUEST_CODECS.getAndSet(slot, null);
+            if (codec != null) return codec;
+        }
+        // Concurrent/reentrant calls own independent codecs; excess instances are not retained.
+        return new RequestCodec();
     }
 
     @SuppressWarnings("unchecked")
@@ -162,5 +183,11 @@ public final class NativeDubboCodec {
         private int capacity() {
             return buf.length;
         }
+    }
+
+    private static final class RequestCodec {
+        private final ReusableByteArrayOutputStream bytes =
+                new ReusableByteArrayOutputStream(REQUEST_BUFFER_INITIAL_BYTES);
+        private final Hessian2Output output = new Hessian2Output();
     }
 }
