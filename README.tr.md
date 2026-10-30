@@ -2,11 +2,11 @@
 
 [English](README.md) | [Türkçe](README.tr.md)
 
-## 0.9.0 İle Başlayın
+## 0.9.1 İle Başlayın
 
 Sınırlı Tokio I/O havuzu ile Java tamamlama havuzu ayrıldı. Sabit bütçe içinde metadata kodlaması yeniden kullanılır. İstek argümanları ve yanıtlar cachelenmez. Ayrı native-provider modülleri deneysel kalır; varsayılan provider değildir.
 
-[Kullanım rehberi](docs/functional-operations.tr.md) · [Sürüm notları](docs/RELEASE_NOTES_v0.9.0.tr.md)
+[Kullanım rehberi](docs/functional-operations.tr.md) · [Sürüm notları](docs/RELEASE_NOTES_v0.9.1.tr.md)
 
 
 Yeni kullanım rehberi: [Açık ve sınırlı işlemler](docs/functional-operations.tr.md).
@@ -52,8 +52,8 @@ blocking mutex kullanmaya devam eder. RSS veya performans kabulü iddiası yoktu
 Yeni parser politikası test edilmemiş kaynak değişikliğidir; son doğrulanmış
 DLL/SO içinde yoktur. Yeni factory bu yetenek metriklerini arar ve eski dosyaları reddeder.
 
-[![Sürüm](https://img.shields.io/badge/sürüm-0.9.0-blue.svg)](https://github.com/esasmer-dou/java-rust-dubbo/releases/tag/v0.9.0)
-[![REST çizgisi](https://img.shields.io/badge/rust--java--rest-4.8.0-green.svg)](https://github.com/esasmer-dou/rust-java-rest/releases/tag/v4.8.0)
+[![Sürüm](https://img.shields.io/badge/sürüm-0.9.1-blue.svg)](https://github.com/esasmer-dou/java-rust-dubbo/releases/tag/v0.9.1)
+[![REST çizgisi](https://img.shields.io/badge/rust--java--rest-4.8.1-green.svg)](https://github.com/esasmer-dou/rust-java-rest/releases/tag/v4.8.1)
 
 `java-rust-dubbo`, Java/Rust REST framework içinde Dubbo provider çağırmak için hazırlanmış küçük ve kontrollü bir consumer kütüphanesidir.
 
@@ -65,7 +65,7 @@ Kullanım modeli basittir:
 - İsterseniz Dubbo TCP data-plane Rust tarafında çalışır; böylece consumer JVM daha küçük kalır.
 - ZooKeeper, Netty ve resmi Dubbo client stack varsayılan olarak zorunlu değildir.
 
-Güncel uyumlu sürüm çizgisi `java-rust-dubbo:0.9.0` ve `rust-java-rest:4.8.0` şeklindedir. Birden
+Güncel uyumlu sürüm çizgisi `java-rust-dubbo:0.9.1` ve `rust-java-rest:4.8.1` şeklindedir. Birden
 fazla Dubbo interface'i tek bir deklaratif client seti içinde tanımlayabilirsiniz. Generated client
 bean'leri aynı bounded transport lifecycle'ı paylaşır. Provider restart güvenliği ve yalnız seçilen
 `blocking` veya `tokio-demux` transport kaynaklarının açılması davranışı korunur.
@@ -151,7 +151,7 @@ Bu kütüphane, "dependency ekleyince her şeyi otomatik yapsın" yaklaşımınd
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.9.0</version>
+  <version>0.9.1</version>
 </dependency>
 ```
 
@@ -197,7 +197,7 @@ En küçük static-provider native kurulum için full JAR yerine `native-static`
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.9.0</version>
+  <version>0.9.1</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -215,7 +215,7 @@ Native modun çalışması için Java/Rust framework native library de yüklü o
 
 Native Dubbo transport, Dubbo native ABI `7` gerektirir. Güncel uyumlu kaynak runtime'ı REST ABI
 `29`, Redis ABI `6` ve Glowroot ABI `6` kullanır. Bu rehberde gösterilen yayınlanmış Maven sürümü
-`rust-java-rest:4.8.0` değeridir. Aynı koordineli ABI hattında paketlenen native artifact'i kullanın.
+`rust-java-rest:4.8.1` değeridir. Aynı koordineli ABI hattında paketlenen native artifact'i kullanın.
 Framework startup sırasında paketlenen kaynak revision ve platform hash bilgisini doğrular.
 `NativeDubboBridge` de ilk native client oluşturulmadan önce Dubbo ABI kontrolü yapar. Eski framework
 release'inden alınan DLL/SO dosyasını yeni image içine kopyalamayın.
@@ -441,7 +441,7 @@ runtime dependency yüzeyine girmesini önler:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.9.0</version>
+  <version>0.9.1</version>
   <classifier>codegen</classifier>
   <scope>provided</scope>
 </dependency>
@@ -454,7 +454,7 @@ Build-only classifier'ı `annotationProcessorPaths` içine ekleyin:
   <path>
     <groupId>com.reactor</groupId>
     <artifactId>java-rust-dubbo</artifactId>
-    <version>0.9.0</version>
+    <version>0.9.1</version>
     <classifier>codegen</classifier>
   </path>
 </annotationProcessorPaths>
@@ -855,9 +855,9 @@ mvn clean verify
 
 Üretilen paketler:
 
-- `target/java-rust-dubbo-0.9.0.jar`
-- `target/java-rust-dubbo-0.9.0-native-static.jar`
-- `target/java-rust-dubbo-0.9.0-codegen.jar` (yalnızca derleme sırasında kullanılır)
-- `target/java-rust-dubbo-0.9.0-sources.jar`
+- `target/java-rust-dubbo-0.9.1.jar`
+- `target/java-rust-dubbo-0.9.1-native-static.jar`
+- `target/java-rust-dubbo-0.9.1-codegen.jar` (yalnızca derleme sırasında kullanılır)
+- `target/java-rust-dubbo-0.9.1-sources.jar`
 
-Sürüm ayrıntıları: [java-rust-dubbo 0.9.0](docs/RELEASE_NOTES_v0.9.0.tr.md).
+Sürüm ayrıntıları: [java-rust-dubbo 0.9.1](docs/RELEASE_NOTES_v0.9.1.tr.md).
