@@ -633,11 +633,15 @@ Use `invokeAsync()` when your REST framework handler can return `CompletionStage
 
 ### 7. Use It From A Handler Or Service
 
-Example with a raw JSON response:
+#### Unreleased: Owned REST Responses
+
+The following adapter is a source-only change, not part of published `0.9.1`. It requires the optional
+REST integration and matching future native cleanup exports. Example with an owned native JSON body:
 
 ```java
 import com.reactor.rust.annotations.RustRoute;
 import com.reactor.rust.di.annotation.Autowired;
+import com.reactor.rust.dubbo.http.DubboResponses;
 import com.reactor.rust.http.RawResponse;
 import com.reactor.rust.http.ResponseEntity;
 
@@ -653,11 +657,40 @@ public final class CatalogHandler {
             responseType = RawResponse.class
     )
     public CompletableFuture<ResponseEntity<RawResponse>> catalog() {
-        return catalogClient.nestedCatalogNativeJsonAsync()
-                .thenApply(handle -> ResponseEntity.ok(RawResponse.nativeResponse(handle.nativeId())));
+        return DubboResponses.replyAsync(
+                catalogClient.nestedCatalogNativeJsonAsync(), DubboResponses::reply);
     }
 }
 ```
+
+`DubboResponses.ok(handle)` transfers ownership with HTTP `200`; `created(handle)` uses `201`.
+`reply(handle)` preserves the handle's status; `reply(ResponseEntity<NativeResponseHandle>)` preserves
+the application's explicit status and headers. Native body bytes remain in Rust. Transfer a transient
+handle only once; do not extract/reuse its ID or apply these ownership helpers to a permanent response.
+
+With the unreleased REST APT, the equivalent handler can return the carrier directly:
+
+```java
+@GetMapping("/api/v1/catalog")
+public CompletionStage<NativeResponseHandle> catalog() {
+    return catalogClient.nestedCatalogNativeJsonAsync();
+}
+```
+
+Use `com.reactor.rust.dubbo.NativeResponseHandle` and `java.util.concurrent.CompletionStage`.
+This is the native JSON handle type; there is no separate `NativeJsonHandle` API. APT also adapts
+sync and `ResponseEntity<NativeResponseHandle>` returns without reflection on the request path.
+Package generated startup registration; no mandatory core dependency on Dubbo is introduced.
+
+`replyAsync(source, DubboResponses::reply)` does not cancel the source RPC when HTTP is cancelled.
+The bounded RPC deadline remains active; a late owned response is closed when it cannot be delivered.
+Normal writes consume ownership; abort/error cleanup releases it. Do not replace this adapter with
+a cancellable `thenApply` chain. Buffer retry rewrites the existing result: it neither repeats the
+provider operation nor automatically caches response bytes.
+
+K-001 keeps JNI primary. Dubbo ABI `7` and REST ABI `29` signatures remain unchanged; additive cleanup
+exports still require a coordinated future native rebuild and matching provenance. Updating Java alone
+does not upgrade the published native binaries. No ARM runtime qualification is implied.
 
 If the provider is down or overloaded, handle the failed future and return a controlled HTTP response from your application layer.
 

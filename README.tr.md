@@ -627,11 +627,15 @@ public final class CatalogClient {
 
 ### 7. Handler İçinden Kullanın
 
-Provider JSON döndürüyorsa bunu raw JSON response olarak sunabilirsiniz:
+#### Henüz Yayımlanmadı: REST Yanıt Sahipliği
+
+Aşağıdaki adaptör yalnız kaynak ağacındadır; yayımlanmış `0.9.1` paketinde yoktur. İsteğe bağlı REST
+entegrasyonu ve gelecekte eşleşen native temizleme export'ları gerekir. Native JSON body örneği:
 
 ```java
 import com.reactor.rust.annotations.RustRoute;
 import com.reactor.rust.di.annotation.Autowired;
+import com.reactor.rust.dubbo.http.DubboResponses;
 import com.reactor.rust.http.RawResponse;
 import com.reactor.rust.http.ResponseEntity;
 
@@ -647,11 +651,40 @@ public final class CatalogHandler {
             responseType = RawResponse.class
     )
     public CompletableFuture<ResponseEntity<RawResponse>> catalog() {
-        return catalogClient.nestedCatalogNativeJsonAsync()
-                .thenApply(handle -> ResponseEntity.ok(RawResponse.nativeResponse(handle.nativeId())));
+        return DubboResponses.replyAsync(
+                catalogClient.nestedCatalogNativeJsonAsync(), DubboResponses::reply);
     }
 }
 ```
+
+`DubboResponses.ok(handle)` sahipliği HTTP `200` ile devreder; `created(handle)` ise `201` kullanır.
+`reply(handle)` handle'ın durumunu korur. `reply(ResponseEntity<NativeResponseHandle>)`, uygulamanın
+açık durum ve başlıklarını korur. Native body byte'ları Rust'ta kalır. Geçici handle'ın sahipliğini
+yalnız bir kez devredin; ID'sini çıkarıp yeniden kullanmayın. Bu yardımcıları kalıcı yanıt için kullanmayın.
+
+Henüz yayımlanmamış REST APT ile eşdeğer handler doğrudan taşıyıcıyı dönebilir:
+
+```java
+@GetMapping("/api/v1/catalog")
+public CompletionStage<NativeResponseHandle> catalog() {
+    return catalogClient.nestedCatalogNativeJsonAsync();
+}
+```
+
+`com.reactor.rust.dubbo.NativeResponseHandle` ve `java.util.concurrent.CompletionStage` kullanın.
+Native JSON handle tipi budur; ayrı bir `NativeJsonHandle` API'si yoktur. APT, sync ve
+`ResponseEntity<NativeResponseHandle>` dönüşlerini de istek yolunda reflection olmadan uyarlar.
+Üretilmiş startup kaydını paketleyin. Core'a zorunlu Dubbo bağımlılığı eklenmez.
+
+`replyAsync(source, DubboResponses::reply)`, HTTP iptalinde kaynak RPC'yi iptal etmez. Sınırlı RPC
+deadline'ı sürer; geç gelen owned yanıt iletilemezse kapatılır. Normal yazım sahipliği tüketir;
+iptal/hata temizliği owner'ı bırakır. Bu adaptörü iptal edilebilir `thenApply` zinciriyle değiştirmeyin.
+Buffer yeniden yazımı mevcut sonucu yazar; provider işini tekrarlamaz ve yanıt byte'larını otomatik
+cache'lemez.
+
+K-001 gereği birincil köprü JNI'dır. Dubbo ABI `7` ve REST ABI `29` imzaları değişmez; ek temizleme
+export'ları yine koordineli yeni native derleme ve eşleşen provenance gerektirir. Yalnız Java'yı
+güncellemek yayımlanmış native dosyaları güncellemez. ARM çalışma onayı iddiası yoktur.
 
 Provider hata verirse veya timeout olursa uygulama katmanında kontrollü HTTP response dönün. Örneğin 503 ve kısa bir JSON hata body çoğu senaryo için yeterlidir.
 
