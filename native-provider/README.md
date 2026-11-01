@@ -8,11 +8,12 @@ JNI/Tokio engine handles classic Dubbo TCP and Hessian framing. There is no
 second Dubbo acceptor in `rust-spring`, avoiding duplicate transport, deadline
 and native ownership implementations. Existing provider defaults are unchanged.
 
-**Source-only, unreleased modules.** The `0.9.0` coordinates below identify this
-source build, not published packages. The runtime is `java-rust-dubbo-runtime:0.7.1`,
-but current bounded/parser-policy native capabilities are also required. Current
-frozen-source Linux functional checks and the focused warmed-load comparison
-passed in EmaTech. Windows rebuild and coordinated distribution remain open.
+**Optional experimental modules, included in 0.9.2.** The adapter uses
+`java-rust-dubbo-runtime:0.8.1` and its matching native library. Keep these
+artifacts together; do not replace only the SO/DLL. Linux functional and focused
+load evidence was collected in EmaTech. The REST/cache cross-platform checks
+are not Windows or ARM qualification of this provider. The default provider
+remains `PlainDubboProvider`.
 
 ## Start With The Sample
 
@@ -26,7 +27,7 @@ For another application, add the adapter and explicitly enable its processor:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo-native-provider</artifactId>
-  <version>0.9.0</version>
+  <version>0.9.2</version>
 </dependency>
 ```
 
@@ -42,7 +43,7 @@ For another application, add the adapter and explicitly enable its processor:
       <path>
         <groupId>com.reactor</groupId>
         <artifactId>java-rust-dubbo-native-provider-codegen</artifactId>
-        <version>0.9.0</version>
+        <version>0.9.2</version>
       </path>
     </annotationProcessorPaths>
     <annotationProcessors>
@@ -54,7 +55,7 @@ For another application, add the adapter and explicitly enable its processor:
 
 Merge other required processors explicitly; do not put this processor on the
 production classpath. The adapter's production dependencies are the original
-`java-rust-dubbo:0.9.0` API (its transitives excluded) and shared runtime.
+`java-rust-dubbo:0.9.2` API (its transitives excluded) and shared runtime.
 It needs neither Spring nor official Dubbo/Netty/HessianLite. The shared package
 with the original API is supported on the classpath, not the JPMS module path.
 

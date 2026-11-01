@@ -2,14 +2,37 @@
 
 [English](README.md) | [Türkçe](README.tr.md)
 
-## Start With 0.9.1
+## Start With 0.9.2
 
 Bounded Tokio I/O and Java completion pools are isolated. Metadata encoding is reused within a fixed budget; request arguments and responses are not cached. The separate native-provider modules remain experimental and are not the default provider.
 
-[Usage guide](docs/functional-operations.md) · [Release notes](docs/RELEASE_NOTES_v0.9.1.md)
+[Usage guide](docs/functional-operations.md) · [Release notes](docs/RELEASE_NOTES_v0.9.2.md)
 
 
 New usage guide: [Explicit, bounded operations](docs/functional-operations.md).
+
+### Completion Queue Ownership (0.9.2)
+
+The coordinated native runtime releases a reserved `tokio-demux` completion queue slot
+when a worker dequeues the result, before it calls Java. The response-body permit
+stays held until that callback returns. A continuation can submit its next RPC
+without being rejected by its own already-dequeued queue slot; body memory stays
+bounded. No queue size, timeout, transport default or ABI changes.
+
+Native rejection messages now identify the full queue: completion, async-worker
+or endpoint request queue. The client inflight limit has its own message. A full
+queue still rejects work; these messages do not imply a provider outage. Public
+HTTP errors remain sanitized by the application. `blocking` transport does not
+use the Tokio completion queue and does not gain this scheduling change.
+
+Keep completion continuations short and non-blocking. Starting the next RPC and
+returning its stage is supported. Calling `join()` or `get()` inside that
+continuation can occupy every completion worker while waiting for another result
+that needs the same workers. Move blocking business work to a separately bounded
+application executor; do not use the common pool or increase queues to hide it.
+
+Use Dubbo `0.9.2` with REST/platform `4.8.2`. The coordinated native package contains
+this fix. Do not copy a replacement SO/DLL into an older artifact.
 
 ### Isolated Async Completions (0.9.0)
 
@@ -34,8 +57,8 @@ executor. The guard keeps its existing extra one-second grace period, with up to
 50 ms check granularity. Normal RPC timeouts are not increased. Checking stops
 when no calls remain.
 
-Queue capacity is reserved before sending an RPC and released after the Java
-continuation finishes. A separate body budget includes both queued and executing
+Queue capacity is reserved before sending an RPC and released when a completion
+worker dequeues the result. A separate body budget includes both queued and executing
 completions. A slow continuation cannot turn the completion queue into an
 unbounded collection of response bodies. Sent business calls are not replayed.
 The extra native threads use the configured native stack size. This is not a
@@ -54,8 +77,8 @@ No RSS or performance acceptance is claimed.
 The new parser-policy source is untested and not in the last verified DLL/SO;
 the new factory requires its capability gauges and rejects those older binaries.
 
-[![Version](https://img.shields.io/badge/version-0.9.1-blue.svg)](https://github.com/esasmer-dou/java-rust-dubbo/releases/tag/v0.9.1)
-[![REST line](https://img.shields.io/badge/rust--java--rest-4.8.1-green.svg)](https://github.com/esasmer-dou/rust-java-rest/releases/tag/v4.8.1)
+[![Version](https://img.shields.io/badge/version-0.9.2-blue.svg)](https://github.com/esasmer-dou/java-rust-dubbo/releases/tag/v0.9.2)
+[![REST line](https://img.shields.io/badge/rust--java--rest-4.8.2-green.svg)](https://github.com/esasmer-dou/rust-java-rest/releases/tag/v4.8.2)
 
 `java-rust-dubbo` is a small Dubbo consumer library for the Java/Rust REST framework.
 
@@ -68,7 +91,7 @@ The library keeps the programming model simple:
 - Dubbo calls can use a Rust native transport for lower JVM RSS.
 - ZooKeeper and the official Dubbo/Netty client stack are optional, not default requirements.
 
-The current aligned release is `java-rust-dubbo:0.9.1` with `rust-java-rest:4.8.1`. It keeps one
+The current aligned release is `java-rust-dubbo:0.9.2` with `rust-java-rest:4.8.2`. It keeps one
 declarative client set, one shared bounded transport lifecycle, repeatable generated client
 declarations, and build-time validation. Existing provider restart handling and the exclusive
 `blocking` or `tokio-demux` transport planes remain in place.
@@ -147,7 +170,7 @@ Use the official Dubbo stack instead when you need full Dubbo governance, config
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.9.1</version>
+  <version>0.9.2</version>
 </dependency>
 ```
 
@@ -193,7 +216,7 @@ For the smallest static-provider native setup, use the `native-static` classifie
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.9.1</version>
+  <version>0.9.2</version>
   <classifier>native-static</classifier>
 </dependency>
 ```
@@ -211,7 +234,7 @@ The Java/Rust framework native library must also be present. In `rust-java-rest`
 
 Native Dubbo transport requires Dubbo native ABI `7`. The current aligned source runtime
 uses REST ABI `29`, Redis ABI `6`, and Glowroot ABI `6`. The published Maven version shown in this
-guide is `rust-java-rest:4.8.1`; use the native artifact packaged with the same coordinated ABI line.
+guide is `rust-java-rest:4.8.2`; use the native artifact packaged with the same coordinated ABI line.
 Framework startup verifies the packaged source revision and platform hash. `NativeDubboBridge` also
 checks the Dubbo ABI before the first native client is created. Do not copy a DLL/SO from an older
 framework release into a newer image.
@@ -448,7 +471,7 @@ runtime dependency surface:
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo</artifactId>
-  <version>0.9.1</version>
+  <version>0.9.2</version>
   <classifier>codegen</classifier>
   <scope>provided</scope>
 </dependency>
@@ -461,7 +484,7 @@ Add the build-only classifier to `annotationProcessorPaths`:
   <path>
     <groupId>com.reactor</groupId>
     <artifactId>java-rust-dubbo</artifactId>
-    <version>0.9.1</version>
+    <version>0.9.2</version>
     <classifier>codegen</classifier>
   </path>
 </annotationProcessorPaths>
@@ -633,10 +656,10 @@ Use `invokeAsync()` when your REST framework handler can return `CompletionStage
 
 ### 7. Use It From A Handler Or Service
 
-#### Unreleased: Owned REST Responses
+#### Owned REST Responses (0.9.2)
 
-The following adapter is a source-only change, not part of published `0.9.1`. It requires the optional
-REST integration and matching future native cleanup exports. Example with an owned native JSON body:
+The following adapter is included in Dubbo `0.9.2`. It requires the optional
+REST integration and matching REST/platform `4.8.2` native package. Example with an owned native JSON body:
 
 ```java
 import com.reactor.rust.annotations.RustRoute;
@@ -689,8 +712,8 @@ a cancellable `thenApply` chain. Buffer retry rewrites the existing result: it n
 provider operation nor automatically caches response bytes.
 
 K-001 keeps JNI primary. Dubbo ABI `7` and REST ABI `29` signatures remain unchanged; additive cleanup
-exports still require a coordinated future native rebuild and matching provenance. Updating Java alone
-does not upgrade the published native binaries. No ARM runtime qualification is implied.
+exports are included in the coordinated REST 4.8.2 native package. Updating Java alone
+does not upgrade a manually configured native library. Compatibility receipts describe platform coverage.
 
 If the provider is down or overloaded, handle the failed future and return a controlled HTTP response from your application layer.
 
@@ -887,13 +910,13 @@ mvn clean verify
 
 Release artifacts are produced under `target/`:
 
-- `java-rust-dubbo-0.9.1.jar`
-- `java-rust-dubbo-0.9.1-native-static.jar`
-- `java-rust-dubbo-0.9.1-codegen.jar` (build time only)
-- `java-rust-dubbo-0.9.1-sources.jar`
+- `java-rust-dubbo-0.9.2.jar`
+- `java-rust-dubbo-0.9.2-native-static.jar`
+- `java-rust-dubbo-0.9.2-codegen.jar` (build time only)
+- `java-rust-dubbo-0.9.2-sources.jar`
 
 ## Documentation
 
 - [Production Guide](docs/PRODUCTION_GUIDE.md)
-- [Release Notes](docs/RELEASE_NOTES_v0.9.1.md)
+- [Release Notes](docs/RELEASE_NOTES_v0.9.2.md)
 - [Turkish README](README.tr.md)

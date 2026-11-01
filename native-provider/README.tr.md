@@ -8,12 +8,12 @@ ve Hessian frame işlemlerini yürütür. `rust-spring` içine ikinci Dubbo acce
 eklenmez; ağ katmanı, deadline ve native sahiplik uygulaması çoğaltılmaz.
 Mevcut provider varsayılanları değişmez.
 
-**Modüller yalnız kaynak çalışmasıdır, yayımlanmadı.** Aşağıdaki `0.9.0`
-koordinatları kaynak derlemesine aittir, yayımlanmış paket değildir. Runtime
-`java-rust-dubbo-runtime:0.7.1` olmakla birlikte güncel sınırlı/parser-policy
-native yetenekleri de gerekir. Güncel dondurulmuş kaynağın Linux işlev kontrolleri
-ve odak sıcak yük karşılaştırması EmaTech'te başarılıdır. Windows rebuild ve
-koordineli dağıtım kabulü açıktır.
+**İsteğe bağlı deneysel modüller, 0.9.2 paketlerine dahildir.** Adaptör,
+`java-rust-dubbo-runtime:0.8.1` ve onunla eşleşen native dosyayı kullanır.
+Bu paketleri birlikte kullanın. Yalnız SO/DLL dosyasını değiştirmeyin.
+Linux işlev ve odak yük ölçümleri EmaTech'te yapıldı. REST/cache için yapılan
+platform testleri bu provider'ın Windows veya ARM kabulü değildir.
+Varsayılan provider, `PlainDubboProvider` olarak kalır.
 
 ## Önce Sample'ı Kullanın
 
@@ -28,7 +28,7 @@ Başka bir uygulamada adaptörü ekleyin ve processor'ı açıkça etkinleştiri
 <dependency>
   <groupId>com.reactor</groupId>
   <artifactId>java-rust-dubbo-native-provider</artifactId>
-  <version>0.9.0</version>
+  <version>0.9.2</version>
 </dependency>
 ```
 
@@ -44,7 +44,7 @@ Başka bir uygulamada adaptörü ekleyin ve processor'ı açıkça etkinleştiri
       <path>
         <groupId>com.reactor</groupId>
         <artifactId>java-rust-dubbo-native-provider-codegen</artifactId>
-        <version>0.9.0</version>
+        <version>0.9.2</version>
       </path>
     </annotationProcessorPaths>
     <annotationProcessors>
@@ -56,7 +56,7 @@ Başka bir uygulamada adaptörü ekleyin ve processor'ı açıkça etkinleştiri
 
 Gereken diğer processor'ları açıkça birleştirin; bu processor'ı production
 classpath'e koymayın. Adaptörün production bağımlılıkları, transitifleri dışlanan
-eski `java-rust-dubbo:0.9.0` API'si ile ortak runtime'dır. Spring veya resmî
+eski `java-rust-dubbo:0.9.2` API'si ile ortak runtime'dır. Spring veya resmî
 Dubbo/Netty/HessianLite gerekmez. Eski API ile ortak package yalnız classpath'te
 desteklenir; JPMS module path desteklenmez.
 
