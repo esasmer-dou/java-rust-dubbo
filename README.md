@@ -348,7 +348,7 @@ dubbo.provider.executor.io-threads=1
 This avoids Dubbo's default `200` handler-thread ceiling in small pods. `cached` is rejected because
 it is not a bounded production choice. Direct callers of the six-argument `ProviderConfig`
 constructor retain Dubbo defaults; `DubboProviderSupport` and `DubboProviderApplication` apply the
-bounded configuration above. Override it only with thread, RSS, p99, and rejection evidence.
+bounded configuration above. Increase it only if the provider and its database can handle more concurrent calls.
 
 BEST: keep the service list explicit and move only duplicated lifecycle code to these helpers.
 ANTI-PATTERN: adding an automatic provider scanner that exports every interface on the classpath.
@@ -888,32 +888,6 @@ For many REST-to-Dubbo consumer cases this is enough. If your system depends on 
 | Native response handle | A response id that lets HTTP send a Rust-resident provider body without a Java `byte[]` |
 
 ## Build
-
-### Typed Request Codec Memory
-
-Typed calls keep their Java argument/result contract. The optional Hessian codec
-reuses at most two request encoder states per process, rather than retaining a
-buffer for every caller thread. Concurrent or reentrant calls never share an active
-encoder. Excess states are temporary; failed and oversized states are not pooled.
-Object references and serializer-factory references are cleared before reuse.
-
-`reactor.dubbo.hessian.request-buffer-initial-bytes` (default `256`) and
-`reactor.dubbo.hessian.request-buffer-retain-max-bytes` (default `4096`) still size
-the request byte accumulator. The retain value is not a maximum RPC payload size.
-Larger requests remain supported; their encoder state is discarded afterwards.
-This reduces encoding allocation, not the size of result DTOs or JVM JIT memory.
-Native-only contracts do not load this optional Hessian implementation.
-
-```powershell
-mvn clean verify
-```
-
-Release artifacts are produced under `target/`:
-
-- `java-rust-dubbo-0.9.2.jar`
-- `java-rust-dubbo-0.9.2-native-static.jar`
-- `java-rust-dubbo-0.9.2-codegen.jar` (build time only)
-- `java-rust-dubbo-0.9.2-sources.jar`
 
 ## Documentation
 

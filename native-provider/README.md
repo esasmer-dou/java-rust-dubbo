@@ -8,18 +8,7 @@ JNI/Tokio engine handles classic Dubbo TCP and Hessian framing. There is no
 second Dubbo acceptor in `rust-spring`, avoiding duplicate transport, deadline
 and native ownership implementations. Existing provider defaults are unchanged.
 
-**Optional experimental modules, included in 0.9.2.** The adapter uses
-`java-rust-dubbo-runtime:0.8.1` and its matching native library. Keep these
-artifacts together; do not replace only the SO/DLL. Linux functional and focused
-load evidence was collected in EmaTech. The REST/cache cross-platform checks
-are not Windows or ARM qualification of this provider. The default provider
-remains `PlainDubboProvider`.
-
 ## Start With The Sample
-
-For runnable official/native profiles using the same Java service, see the
-[sample guide](../../rest-sample-dubbo-provider/docs/NATIVE_PROVIDER.md). It includes
-ports, configuration, shaded-JAR commands and typed 32/512-row HTTP use.
 
 For another application, add the adapter and explicitly enable its processor:
 
@@ -222,9 +211,6 @@ Build-only, from workspace root after preparing coordinated dependencies:
 mvn -B -ntp -f java-rust-dubbo/native-provider-build/pom.xml -Dmaven.test.skip=true install
 ```
 
-Execute tests in an isolated, bounded test environment with the current verified
-native library. Our recorded verification used EmaTech:
-
 ```bash
 NATIVE_LIB=/opt/reactor/native/librust_dubbo.so
 mvn -B -ntp -f java-rust-dubbo/native-provider-build/pom.xml \
@@ -238,25 +224,7 @@ fail rather than silently skip. Child class-load checks require generated/JNI
 classes and reject official Dubbo, Netty, Spring and method-handle fallback.
 The framing helper is test-only, not another production transport.
 
-On 27 October 2026, the current frozen source passed EmaTech functional checks:
-74 Rust tests (57 native + 17 core) and 171 Java tests (164 + 7 sample), including
-bounded metadata-plan bootstrap and response/completion ownership. Two
-unsupported OpenJ9 allocation checks were aborted, not counted as successes;
-eight separate calibrated HotSpot allocation checks passed. Linux build, fmt and
-Clippy checks passed; maximum GLIBC symbol remains 2.14.
-
-The separate four-pair warmed-load comparison passed all nine cells at 1 CPU /
-128 MiB per application. The 32/512-row targets increased useful RPS by 15.70–21.43%,
-reduced p99 by 4.27–17.63% and reduced provider RSS by 19.90–27.10 MiB versus the
-official engine. All three unchanged health-control cells stayed within their
-bands. Final heap decreased by a paired median 7.04 MiB.
-
 The native engine reuses one immutable protocol header plan (at most 1 KiB per
 connection) learned only from scalar wire arguments. Every argument is still
 validated; changed metadata and graphs use the full bounded parser. Responses
 are never cached. Java business code and public contracts remain unchanged.
-
-This is focused warmed-load acceptance, not cold-start/idle-burst or combined
-product qualification. See the [sample guide](../../rest-sample-dubbo-provider/docs/NATIVE_PROVIDER.md)
-for the full comparison and profile settings. Windows DLL/parser-policy and
-coordinated package/distribution rebuild remain item 17.

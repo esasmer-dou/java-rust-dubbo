@@ -890,31 +890,3 @@ Bu özellikler gerekiyorsa official mode veya ayrı bir Dubbo integration servic
 | Native response handle | Provider body Java `byte[]` olmadan Rust belleğinden gönderilirken taşınan response kimliği |
 
 ## Derleme
-
-### Tipli İsteklerde Codec Belleği
-
-Tipli çağrılarda Java parametre ve sonuç sözleşmesi değişmez. İsteğe bağlı Hessian
-codec, her çağıran thread için buffer tutmak yerine process başına en fazla iki
-istek encoder'ını yeniden kullanır. Eşzamanlı çağrılar aynı aktif encoder'ı paylaşmaz.
-Havuz doluysa çağrı kendine ait geçici encoder kullanır. Hatalı veya büyük istekten
-kalan encoder havuza dönmez. Nesne ve serializer-factory referansları temizlenir.
-
-`reactor.dubbo.hessian.request-buffer-initial-bytes` varsayılan `256`,
-`reactor.dubbo.hessian.request-buffer-retain-max-bytes` varsayılan `4096` byte'tır.
-Bu ayarlar istek byte buffer'ına aittir. İkinci değer RPC payload üst sınırı değildir.
-Büyük istek çalışır; ardından encoder havuza alınmaz. Bu düzenleme encode tahsisatını
-azaltır. Sonuç DTO'larının veya JVM JIT'in belleğini ortadan kaldırmaz. Native-only
-sözleşmeler bu isteğe bağlı Hessian uygulamasını yüklemez.
-
-```powershell
-mvn clean verify
-```
-
-Üretilen paketler:
-
-- `target/java-rust-dubbo-0.9.2.jar`
-- `target/java-rust-dubbo-0.9.2-native-static.jar`
-- `target/java-rust-dubbo-0.9.2-codegen.jar` (yalnızca derleme sırasında kullanılır)
-- `target/java-rust-dubbo-0.9.2-sources.jar`
-
-Sürüm ayrıntıları: [java-rust-dubbo 0.9.2](docs/RELEASE_NOTES_v0.9.2.tr.md).

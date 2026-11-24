@@ -8,19 +8,7 @@ ve Hessian frame işlemlerini yürütür. `rust-spring` içine ikinci Dubbo acce
 eklenmez; ağ katmanı, deadline ve native sahiplik uygulaması çoğaltılmaz.
 Mevcut provider varsayılanları değişmez.
 
-**İsteğe bağlı deneysel modüller, 0.9.2 paketlerine dahildir.** Adaptör,
-`java-rust-dubbo-runtime:0.8.1` ve onunla eşleşen native dosyayı kullanır.
-Bu paketleri birlikte kullanın. Yalnız SO/DLL dosyasını değiştirmeyin.
-Linux işlev ve odak yük ölçümleri EmaTech'te yapıldı. REST/cache için yapılan
-platform testleri bu provider'ın Windows veya ARM kabulü değildir.
-Varsayılan provider, `PlainDubboProvider` olarak kalır.
-
 ## Önce Sample'ı Kullanın
-
-Aynı Java servisini kullanan çalıştırılabilir resmî/native profiller
-[sample rehberindedir](../../rest-sample-dubbo-provider/docs/NATIVE_PROVIDER.tr.md).
-Portlar, ayarlar, shaded-JAR komutları ve tipli 32/512 satırlık HTTP kullanımı
-orada açıklanır.
 
 Başka bir uygulamada adaptörü ekleyin ve processor'ı açıkça etkinleştirin:
 
@@ -223,9 +211,6 @@ Koordineli bağımlılıklar hazırlandıktan sonra workspace kökünden yalnız
 mvn -B -ntp -f java-rust-dubbo/native-provider-build/pom.xml -Dmaven.test.skip=true install
 ```
 
-Testleri sınırlı kaynaklara sahip, ayrılmış test ortamınızda güncel doğrulanmış
-native dosyayla çalıştırın. Kayıtlı doğrulamamız EmaTech'te yapıldı:
-
 ```bash
 NATIVE_LIB=/opt/reactor/native/librust_dubbo.so
 mvn -B -ntp -f java-rust-dubbo/native-provider-build/pom.xml \
@@ -238,13 +223,6 @@ artifact doğrulaması yine açıktır. Eksik native girdi/yetenek sessizce atla
 hata verir. Child class-load kontrolü generated/JNI sınıflarını arar; resmî
 Dubbo, Netty, Spring ve method-handle fallback'i reddeder. Frame yardımcısı yalnız
 test içindir, ikinci production transport değildir.
-
-27 Ekim 2026'da güncel dondurulmuş kaynak EmaTech işlev kontrollerini geçti:
-74 Rust testi (57 native + 17 core) ve 171 Java testi (164 + 7 sample); sınırlı
-başlık planının güvenli öğrenilmesi ve yanıt/completion sahipliği dahildir.
-Desteklenmeyen iki OpenJ9 allocation kontrolü iptal edildi, başarılı sayılmaz;
-ayrı sekiz kalibre edilmiş HotSpot allocation kontrolü başarılıdır. Linux derleme,
-fmt ve Clippy kontrolleri başarılıdır; en yüksek GLIBC sembolü 2.14 olarak kaldı.
 
 Ayrı sıcak yük karşılaştırmasında, uygulama başına 1 CPU/128 MiB altında dört
 yeni çiftin dokuz hücresi de geçti. Resmî motora göre 32/512 satırlı hedeflerde
